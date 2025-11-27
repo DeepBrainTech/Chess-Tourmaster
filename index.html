@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chess Tourmaster</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lato:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Lato', sans-serif;
+            background-color: #0f172a; /* Default Slate 900 */
+            color: #e0e0e0;
+            overflow: hidden; /* Prevent scrolling on mobile */
+            touch-action: none;
+            transition: background 0.5s ease;
+        }
+
+        h1, h2, .fantasy-font {
+            font-family: 'Cinzel', serif;
+        }
+
+        /* Board Styling */
+        #game-board {
+            /* Wooden/Textured background for the board itself */
+            background-image: repeating-linear-gradient(45deg, #1e293b 25%, transparent 25%, transparent 75%, #1e293b 75%, #1e293b), repeating-linear-gradient(45deg, #1e293b 25%, #0f172a 25%, #0f172a 75%, #1e293b 75%, #1e293b);
+            background-position: 0 0, 10px 10px;
+            background-size: 20px 20px;
+            box-shadow: inset 0 0 20px #000;
+        }
+
+        .tile {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            aspect-ratio: 1 / 1;
+            position: relative;
+            /* Explicit borders for clarity */
+            border: 1px solid rgba(255, 255, 255, 0.15); 
+        }
+
+        .tile.visited {
+            background-color: #020617 !important; /* Slate 950 */
+            border-color: #1e293b !important;
+            box-shadow: inset 0 0 15px #000;
+            transform: scale(0.92);
+            opacity: 0.6;
+        }
+
+        .tile.valid-move {
+            background-color: rgba(34, 197, 94, 0.15); /* Green tint */
+            box-shadow: 0 0 20px rgba(34, 197, 94, 0.3), inset 0 0 10px rgba(34, 197, 94, 0.1);
+            border-color: #4ade80;
+            cursor: pointer;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.4); }
+            70% { transform: scale(1.03); box-shadow: 0 0 0 8px rgba(74, 222, 128, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+        }
+
+        /* Fire Effect */
+        .fire-anim {
+            animation: burn 0.6s infinite alternate ease-in-out;
+            filter: drop-shadow(0 0 8px #f97316);
+        }
+        @keyframes burn {
+            from { transform: scale(1) translateY(0); filter: drop-shadow(0 0 5px #f97316); }
+            to { transform: scale(1.15) translateY(-2px); filter: drop-shadow(0 0 12px #ea580c); }
+        }
+
+        /* Knight Animation */
+        .knight-piece {
+            animation: bounce 2s infinite ease-in-out;
+            filter: drop-shadow(0 0 10px cyan);
+            position: relative; 
+            z-index: 50;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-12px); }
+        }
+
+        /* Enemy King Animation */
+        .king-piece {
+            animation: floatKing 3s infinite ease-in-out;
+            filter: drop-shadow(0 0 15px #e11d48);
+            position: relative;
+            z-index: 40;
+        }
+        @keyframes floatKing {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-6px) scale(1.1); }
+        }
+        .king-tile {
+            border-color: #e11d48 !important; /* Rose 600 */
+            box-shadow: 0 0 20px rgba(225, 29, 72, 0.3);
+            background-color: #3f1018 !important; /* Dark Red BG */
+        }
+
+        /* Star Animation */
+        .star-pop {
+            animation: starPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) backwards;
+        }
+        @keyframes starPop {
+            0% { transform: scale(0); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Modal Backdrop */
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+        }
+
+        /* Shake animation for errors */
+        .shake {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+        
+        /* Progress Bar for Fire */
+        .fire-timer-bar {
+            transition: width 0.1s linear;
+        }
+
+        /* Background Themes */
+        .bg-theme-cosmic {
+            background: radial-gradient(circle at center, #1e1b4b 0%, #020617 100%);
+        }
+        .bg-theme-royal {
+            background: linear-gradient(135deg, #4a044e 0%, #2e1065 100%);
+        }
+        .bg-theme-nature {
+            background: linear-gradient(to bottom, #064e3b 0%, #022c22 100%);
+        }
+        .bg-theme-inferno {
+            background: radial-gradient(circle at bottom, #7f1d1d 0%, #450a0a 100%);
+        }
+
+        .theme-blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.3;
+            animation: blobFloat 10s infinite alternate;
+        }
+        @keyframes blobFloat {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(20px, -20px) scale(1.1); }
+        }
+    </style>
+</head>
+<body id="main-body" class="h-screen w-screen flex flex-col items-center justify-center relative overflow-hidden bg-theme-cosmic">
+
+    <!-- Background Elements (Dynamic) -->
+    <div id="bg-blobs" class="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+        <div class="theme-blob w-96 h-96 bg-cyan-500 top-0 left-0"></div>
+        <div class="theme-blob w-96 h-96 bg-purple-500 bottom-0 right-0 animation-delay-2000"></div>
+    </div>
+
+    <!-- UI Header -->
+    <div class="z-10 w-full max-w-2xl px-4 mb-2 flex justify-between items-center">
+        <div>
+            <h1 class="text-xl md:text-3xl text-rose-500 font-bold fantasy-font tracking-wider shadow-black drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
+                <i class="fas fa-chess-board mr-2"></i>Tourmaster
+            </h1>
+            <div class="flex items-center gap-3 text-sm md:text-base text-gray-300 mt-1">
+                <span>Lvl <span id="level-display" class="font-bold text-white">1</span></span>
+                <span class="text-gray-500">|</span>
+                <span class="font-mono text-cyan-300"><i class="far fa-clock mr-1"></i><span id="game-timer">00:00</span></span>
+            </div>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="game.undo()" class="bg-slate-700/80 hover:bg-slate-600 text-white p-2 rounded-lg shadow-lg border border-slate-500" title="Undo">
+                <i class="fas fa-undo"></i>
+            </button>
+            <button onclick="game.restartLevel()" class="bg-slate-700/80 hover:bg-slate-600 text-white p-2 rounded-lg shadow-lg border border-slate-500" title="Restart">
+                <i class="fas fa-redo"></i>
+            </button>
+            <button onclick="game.toggleSettings()" class="bg-indigo-700/80 hover:bg-indigo-600 text-white p-2 rounded-lg shadow-lg border border-indigo-500" title="Settings">
+                <i class="fas fa-cog"></i>
+            </button>
+            <button onclick="toggleHelp()" class="bg-rose-700/80 hover:bg-rose-600 text-white p-2 rounded-lg shadow-lg border border-rose-500" title="Help">
+                <i class="fas fa-question"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats Bar -->
+    <div class="z-10 w-full max-w-2xl px-4 mb-2 flex justify-between items-center h-8">
+        <div class="text-cyan-300 font-bold text-sm md:text-lg flex items-center bg-slate-900/50 px-3 py-1 rounded-full border border-slate-700">
+            Tiles Left: <span id="tiles-left" class="ml-2 text-white">0</span>
+        </div>
+        
+        <!-- Fire Timer (Hidden by default) -->
+        <div id="fire-timer-container" class="hidden flex items-center gap-2 text-orange-500 bg-black/60 px-3 py-1 rounded-full border border-orange-900/50">
+            <i class="fas fa-fire animate-pulse"></i>
+            <div class="w-24 h-3 bg-gray-800 rounded-full overflow-hidden border border-orange-900 shadow-inner">
+                <div id="fire-bar" class="h-full bg-gradient-to-r from-yellow-500 via-orange-500 to-red-600 w-full fire-timer-bar"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Board Container -->
+    <div class="z-10 relative bg-slate-800/60 p-2 md:p-3 rounded-xl shadow-2xl border-4 border-slate-600 backdrop-blur-md w-full max-w-[95vw] md:max-w-2xl aspect-square flex items-center justify-center mx-auto">
+        <!-- Board -->
+        <div id="game-board" class="grid gap-1 bg-slate-900 p-2 rounded-lg select-none w-full h-full">
+            <!-- Tiles generated by JS -->
+        </div>
+        
+        <!-- Overlay Message -->
+        <div id="message-overlay" class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 transition-opacity duration-300 z-50">
+            <h2 class="text-4xl md:text-6xl font-bold text-white drop-shadow-[0_4px_4px_rgba(0,0,0,0.9)] fantasy-font transform scale-150 transition-transform duration-300 text-center px-4" id="message-text"></h2>
+        </div>
+    </div>
+
+    <!-- Footer Controls -->
+    <div class="z-10 mt-4 text-center text-gray-400 text-xs">
+        <p>Goal: Clear board &rarr; Capture <span class="text-rose-500 font-bold">King</span></p>
+    </div>
+
+    <!-- Modals -->
+    
+    <!-- Main Modal (Start/Win/Lose) -->
+    <div id="main-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop hidden">
+        <div class="bg-gray-800 border-2 border-rose-600 p-6 md:p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center m-4 relative">
+            <div class="mb-4 text-6xl flex justify-center gap-4" id="modal-icon"></div>
+            <h2 id="modal-title" class="text-3xl font-bold text-white mb-2 fantasy-font"></h2>
+            <div id="modal-body" class="text-gray-300 mb-6 text-sm"></div>
+            <button id="modal-btn" class="w-full bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 text-white font-bold py-3 rounded-xl shadow-lg transition transform hover:scale-105">
+                Action
+            </button>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop hidden" onclick="game.toggleSettings()">
+        <div class="bg-gray-800 border-2 border-indigo-500 p-6 rounded-2xl shadow-2xl max-w-xs w-full m-4" onclick="event.stopPropagation()">
+            <h3 class="text-xl font-bold text-indigo-400 mb-4 fantasy-font text-center">Select Theme</h3>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="game.setTheme('cosmic')" class="p-3 rounded-lg bg-indigo-900 border border-indigo-700 hover:bg-indigo-800 text-white text-sm">Cosmic</button>
+                <button onclick="game.setTheme('royal')" class="p-3 rounded-lg bg-purple-900 border border-purple-700 hover:bg-purple-800 text-white text-sm">Royal</button>
+                <button onclick="game.setTheme('nature')" class="p-3 rounded-lg bg-emerald-900 border border-emerald-700 hover:bg-emerald-800 text-white text-sm">Nature</button>
+                <button onclick="game.setTheme('inferno')" class="p-3 rounded-lg bg-red-900 border border-red-700 hover:bg-red-800 text-white text-sm">Inferno</button>
+            </div>
+            <button onclick="game.toggleSettings()" class="mt-6 w-full bg-slate-700 text-white py-2 rounded-lg hover:bg-slate-600 text-sm">Close</button>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="help-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop hidden" onclick="toggleHelp()">
+        <div class="bg-slate-800 border-2 border-slate-500 p-6 rounded-2xl shadow-2xl max-w-sm w-full m-4" onclick="event.stopPropagation()">
+            <h3 class="text-2xl font-bold text-rose-500 mb-4 fantasy-font border-b border-slate-600 pb-2">Instructions</h3>
+            <ul class="text-left text-gray-300 space-y-3 text-sm">
+                <li class="flex items-start"><i class="fas fa-chess-knight w-6 text-cyan-400 mt-1"></i> <span><strong>Move:</strong> L-shape jump.</span></li>
+                <li class="flex items-start"><i class="fas fa-eraser w-6 text-slate-400 mt-1"></i> <span><strong>Clear:</strong> Tiles vanish upon leaving.</span></li>
+                <li class="flex items-start"><i class="fas fa-fire w-6 text-orange-500 mt-1"></i> <span><strong>Fire:</strong> 3s to move or burn!</span></li>
+                <li class="flex items-start"><i class="fas fa-chess-king w-6 text-rose-500 mt-1"></i> <span><strong>Win:</strong> Capture King when tiles = 0.</span></li>
+            </ul>
+            <button onclick="toggleHelp()" class="mt-6 w-full bg-slate-700 text-white py-2 rounded-lg">Close</button>
+        </div>
+    </div>
+
+    <script>
+        // --- Sound Manager ---
+        const sound = {
+            ctx: null,
+            init() {
+                window.AudioContext = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioContext();
+            },
+            playTone(freq, type, duration, vol=0.1) {
+                if (!this.ctx) this.init();
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            },
+            playMove() {
+                // Whoosh/Plop
+                this.playTone(300, 'sine', 0.15, 0.2);
+                setTimeout(() => this.playTone(100, 'square', 0.2, 0.1), 100); // Crumble effect
+            },
+            playVictory() {
+                if (!this.ctx) this.init();
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+                const now = this.ctx.currentTime;
+                [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+                    setTimeout(() => this.playTone(freq, 'triangle', 0.4, 0.2), i * 150);
+                });
+            },
+            playBurn() {
+                this.speak("You are cooked");
+                // Fizzle sound
+                this.playTone(100, 'sawtooth', 0.5, 0.2);
+            },
+            speak(text) {
+                if ('speechSynthesis' in window) {
+                    window.speechSynthesis.cancel(); // Prioritize new message
+                    const msg = new SpeechSynthesisUtterance(text);
+                    msg.rate = 1.2; 
+                    msg.pitch = 1.0;
+                    window.speechSynthesis.speak(msg);
+                }
+            }
+        };
+
+        // --- Game Config & State ---
+        const CONFIG = {
+            gridSize: 5, 
+            maxLevel: 10,
+            fireTimeLimit: 3000, 
+            fireChance: 0.15 
+        };
+
+        const STATE = {
+            level: 1,
+            grid: [], 
+            knightPos: { r: 0, c: 0 },
+            kingPos: { r: 0, c: 0 },
+            history: [], 
+            tilesLeft: 0,
+            parTime: 10, // Seconds for 3 stars
+            isPlaying: false,
+            fireTimer: null,
+            fireStartTime: 0,
+            lastFireSecond: 4, // Track last spoken countdown second
+            gridSizeVal: 5,
+            gameStartTime: 0,
+            gameTimeInterval: null
+        };
+
+        const ICONS = {
+            knight: '<i class="fas fa-chess-knight knight-piece text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-cyan-400"></i>',
+            king: '<i class="fas fa-chess-king king-piece text-2xl sm:text-3xl md:text-4xl lg:text-5xl text-rose-500"></i>',
+            fire: '<i class="fas fa-fire text-2xl sm:text-3xl md:text-4xl lg:text-5xl text-orange-500 fire-anim opacity-90"></i>',
+        };
+
+        const THEMES = {
+            cosmic: 'bg-theme-cosmic',
+            royal: 'bg-theme-royal',
+            nature: 'bg-theme-nature',
+            inferno: 'bg-theme-inferno'
+        };
+
+        const game = {
+            init() {
+                this.bindEvents();
+                this.showModal('welcome');
+            },
+
+            bindEvents() {
+                document.getElementById('modal-btn').addEventListener('click', () => {
+                    // Init sound on first interaction
+                    if (!sound.ctx) sound.init();
+                    
+                    const type = document.getElementById('modal-btn').dataset.action;
+                    if (type === 'next') this.nextLevel();
+                    else if (type === 'retry') this.restartLevel();
+                    else this.startLevel(1);
+                    this.hideModal();
+                });
+            },
+
+            // --- Level Generation ---
+            generateLevel(levelNum) {
+                STATE.level = levelNum;
+                STATE.gridSizeVal = levelNum > 5 ? 6 : 5;
+                if (levelNum > 8) STATE.gridSizeVal = 7;
+                
+                const size = STATE.gridSizeVal;
+                STATE.grid = Array(size).fill().map(() => Array(size).fill(null));
+
+                // Determine max path length based on level to control difficulty
+                let maxPathLength;
+                if (levelNum === 1) maxPathLength = 5;       // Level 1: Very easy (5 squares total)
+                else if (levelNum === 2) maxPathLength = 8;  // Level 2: Easy (8 squares)
+                else if (levelNum === 3) maxPathLength = 12; // Level 3: Moderate
+                else if (levelNum === 4) maxPathLength = 18; // Level 4: Challenging
+                else maxPathLength = size * size;            // Level 5+: Full board attempt
+
+                let cr = Math.floor(Math.random() * size);
+                let cc = Math.floor(Math.random() * size);
+                STATE.kingPos = { r: cr, c: cc };
+
+                let genGrid = Array(size).fill().map(() => Array(size).fill(0));
+                let path = [{r: cr, c: cc}];
+                genGrid[cr][cc] = 1;
+
+                let curr = {r: cr, c: cc};
+                let totalSquares = size * size;
+                let attempts = 0;
+                
+                // Use maxPathLength to stop generation early for low levels
+                while (path.length < maxPathLength && attempts < 1000) {
+                    let moves = this.getValidMoves(curr.r, curr.c, size);
+                    let validNext = moves.filter(m => genGrid[m.r][m.c] === 0);
+                    if (validNext.length === 0) break;
+                    let next = validNext[Math.floor(Math.random() * validNext.length)];
+                    genGrid[next.r][next.c] = 1;
+                    path.push(next);
+                    curr = next;
+                }
+
+                STATE.knightPos = { ...curr };
+                
+                for(let r=0; r<size; r++) {
+                    for(let c=0; c<size; c++) {
+                        let type = 'empty';
+                        if (r === STATE.kingPos.r && c === STATE.kingPos.c) type = 'king';
+                        else if (genGrid[r][c] === 0) type = 'void';
+                        
+                        let hasFire = false;
+                        let isPath = genGrid[r][c] === 1;
+                        let isStart = (r === STATE.knightPos.r && c === STATE.knightPos.c);
+                        let isKing = (r === STATE.kingPos.r && c === STATE.kingPos.c);
+                        
+                        if (isPath && !isStart && !isKing) {
+                            if (Math.random() < (0.05 + (levelNum * 0.02))) hasFire = true;
+                        }
+
+                        STATE.grid[r][c] = { type: type, hasFire: hasFire, visited: false, r: r, c: c };
+                    }
+                }
+
+                STATE.tilesLeft = 0;
+                for(let r=0; r<size; r++){
+                    for(let c=0; c<size; c++){
+                        if (STATE.grid[r][c].type !== 'void' && STATE.grid[r][c].type !== 'king') {
+                            STATE.tilesLeft++;
+                        }
+                    }
+                }
+                STATE.tilesLeft--; 
+                
+                // Calculate Par Time (3 seconds per tile minimum)
+                STATE.parTime = Math.max(5, STATE.tilesLeft * 2.5);
+
+                STATE.grid[STATE.knightPos.r][STATE.knightPos.c].visited = true;
+
+                STATE.history = [];
+                STATE.isPlaying = true;
+                this.stopFireTimer();
+                this.startGameTimer(); 
+                this.renderBoard();
+                this.updateUI();
+                this.checkFireLogic();
+            },
+
+            startLevel(lvl) {
+                this.generateLevel(lvl);
+                document.getElementById('level-display').innerText = lvl;
+            },
+            nextLevel() { this.startLevel(STATE.level + 1); },
+            restartLevel() { this.startLevel(STATE.level); },
+
+            getValidMoves(r, c, size) {
+                const moves = [
+                    {r: r-2, c: c-1}, {r: r-2, c: c+1},
+                    {r: r-1, c: c-2}, {r: r-1, c: c+2},
+                    {r: r+1, c: c-2}, {r: r+1, c: c+2},
+                    {r: r+2, c: c-1}, {r: r+2, c: c+1}
+                ];
+                return moves.filter(m => m.r >= 0 && m.r < size && m.c >= 0 && m.c < size);
+            },
+
+            handleMove(r, c) {
+                if (!STATE.isPlaying) return;
+
+                const curr = STATE.knightPos;
+                const dr = Math.abs(curr.r - r);
+                const dc = Math.abs(curr.c - c);
+                
+                if (!((dr === 2 && dc === 1) || (dr === 1 && dc === 2))) {
+                    this.triggerShake(); return;
+                }
+
+                const targetTile = STATE.grid[r][c];
+
+                if (targetTile.type === 'void' || targetTile.visited) {
+                    this.triggerShake(); return;
+                }
+
+                if (targetTile.type === 'king') {
+                    if (STATE.tilesLeft > 0) {
+                        this.showMessage("Guards remain!", "text-rose-400");
+                        this.triggerShake();
+                        return;
+                    } else {
+                        this.winGame();
+                        return;
+                    }
+                }
+
+                sound.playMove(); // Play move sound
+                STATE.history.push({ knightPos: { ...curr }, prevPos: { r, c } });
+
+                this.stopFireTimer();
+                STATE.knightPos = { r, c };
+                targetTile.visited = true;
+                STATE.tilesLeft--;
+
+                this.renderBoard();
+                this.updateUI();
+                this.checkFireLogic();
+                this.checkStuck();
+            },
+
+            undo() {
+                if (!STATE.isPlaying || STATE.history.length === 0) return;
+                const lastState = STATE.history.pop();
+                STATE.knightPos = lastState.knightPos;
+                const tile = STATE.grid[lastState.prevPos.r][lastState.prevPos.c];
+                tile.visited = false; 
+                STATE.tilesLeft++;
+                this.stopFireTimer();
+                this.renderBoard();
+                this.updateUI();
+                this.checkFireLogic();
+            },
+
+            startGameTimer() {
+                if(STATE.gameTimeInterval) clearInterval(STATE.gameTimeInterval);
+                STATE.gameStartTime = Date.now();
+                const timerEl = document.getElementById('game-timer');
+                
+                STATE.gameTimeInterval = setInterval(() => {
+                    if(!STATE.isPlaying) return;
+                    const diff = Math.floor((Date.now() - STATE.gameStartTime) / 1000);
+                    const m = Math.floor(diff / 60).toString().padStart(2, '0');
+                    const s = (diff % 60).toString().padStart(2, '0');
+                    timerEl.innerText = `${m}:${s}`;
+                }, 1000);
+                document.getElementById('game-timer').innerText = "00:00";
+            },
+
+            stopGameTimer() {
+                if(STATE.gameTimeInterval) clearInterval(STATE.gameTimeInterval);
+            },
+
+            checkFireLogic() {
+                const r = STATE.knightPos.r;
+                const c = STATE.knightPos.c;
+                const tile = STATE.grid[r][c];
+
+                if (tile.hasFire) {
+                    document.getElementById('fire-timer-container').classList.remove('hidden');
+                    STATE.fireStartTime = Date.now();
+                    STATE.lastFireSecond = 4; // Reset countdown tracker
+                    
+                    const updateTimer = () => {
+                        if (!STATE.isPlaying) return;
+                        const elapsed = Date.now() - STATE.fireStartTime;
+                        const remaining = CONFIG.fireTimeLimit - elapsed;
+                        const pct = Math.max(0, (remaining / CONFIG.fireTimeLimit) * 100);
+                        
+                        document.getElementById('fire-bar').style.width = pct + "%";
+
+                        // Speak Countdown
+                        const seconds = Math.ceil(remaining / 1000);
+                        if (seconds < STATE.lastFireSecond && seconds > 0) {
+                            sound.speak(seconds.toString());
+                            STATE.lastFireSecond = seconds;
+                        }
+
+                        if (remaining <= 0) this.loseGame("Burned by fire!");
+                        else STATE.fireTimer = requestAnimationFrame(updateTimer);
+                    };
+                    STATE.fireTimer = requestAnimationFrame(updateTimer);
+                } else {
+                    document.getElementById('fire-timer-container').classList.add('hidden');
+                    window.speechSynthesis.cancel(); // Stop counting if safe
+                }
+            },
+
+            stopFireTimer() {
+                if (STATE.fireTimer) cancelAnimationFrame(STATE.fireTimer);
+                document.getElementById('fire-timer-container').classList.add('hidden');
+                window.speechSynthesis.cancel(); 
+            },
+
+            checkStuck() {
+                if (STATE.tilesLeft === 0) return; 
+                const curr = STATE.knightPos;
+                const moves = this.getValidMoves(curr.r, curr.c, STATE.gridSizeVal);
+                const canMove = moves.some(m => {
+                    const t = STATE.grid[m.r][m.c];
+                    if (t.type === 'void' || t.visited) return false;
+                    if (t.type === 'king') return false; 
+                    return true;
+                });
+                if (!canMove) setTimeout(() => this.loseGame("Trapped!"), 500);
+            },
+
+            toggleSettings() {
+                const m = document.getElementById('settings-modal');
+                m.classList.toggle('hidden');
+            },
+
+            setTheme(themeName) {
+                const body = document.getElementById('main-body');
+                body.className = body.className.replace(/bg-theme-\w+/, THEMES[themeName]);
+                this.toggleSettings();
+            },
+
+            renderBoard() {
+                const board = document.getElementById('game-board');
+                const size = STATE.gridSizeVal;
+                board.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+                board.innerHTML = '';
+
+                for(let r=0; r<size; r++) {
+                    for(let c=0; c<size; c++) {
+                        const tileData = STATE.grid[r][c];
+                        const el = document.createElement('div');
+                        let classes = "tile w-full rounded-lg flex items-center justify-center ";
+                        let zIndex = 10; 
+
+                        if (tileData.type === 'void') {
+                            classes += "opacity-0 pointer-events-none"; zIndex = 0;
+                        } else if (tileData.type === 'king') {
+                            classes += "bg-slate-800/80 king-tile"; zIndex = 20;
+                        } else {
+                            classes += "bg-slate-700/80 hover:bg-slate-600/80 border-slate-600";
+                        }
+
+                        if (tileData.visited && !(r===STATE.knightPos.r && c===STATE.knightPos.c)) {
+                            classes += " visited";
+                        }
+
+                        if (STATE.isPlaying) {
+                            const dr = Math.abs(STATE.knightPos.r - r);
+                            const dc = Math.abs(STATE.knightPos.c - c);
+                            const isKnightMove = (dr === 2 && dc === 1) || (dr === 1 && dc === 2);
+                            let isDest = false;
+                            if (isKnightMove && !tileData.visited && tileData.type !== 'void') {
+                                if (tileData.type === 'king') {
+                                    if (STATE.tilesLeft === 0) isDest = true;
+                                } else {
+                                    isDest = true;
+                                }
+                            }
+                            if (isDest) classes += " valid-move";
+                        }
+
+                        if (r === STATE.knightPos.r && c === STATE.knightPos.c) {
+                            zIndex = 30; 
+                        }
+
+                        el.className = classes;
+                        el.style.zIndex = zIndex; 
+
+                        let content = '';
+                        if (tileData.hasFire) content += ICONS.fire;
+                        if (tileData.type === 'king') content += ICONS.king;
+                        
+                        if (r === STATE.knightPos.r && c === STATE.knightPos.c) {
+                            content += `<div class="absolute inset-0 flex items-center justify-center pointer-events-none">${ICONS.knight}</div>`;
+                            el.classList.add('border-cyan-500', 'shadow-[0_0_20px_rgba(6,182,212,0.4)]');
+                        }
+
+                        el.innerHTML = content;
+                        el.onclick = () => this.handleMove(r, c);
+                        board.appendChild(el);
+                    }
+                }
+            },
+
+            updateUI() {
+                document.getElementById('tiles-left').innerText = STATE.tilesLeft;
+            },
+
+            triggerShake() {
+                const b = document.getElementById('game-board');
+                b.classList.remove('shake');
+                void b.offsetWidth;
+                b.classList.add('shake');
+            },
+
+            showMessage(msg, colorClass) {
+                const el = document.getElementById('message-overlay');
+                const txt = document.getElementById('message-text');
+                txt.innerText = msg;
+                txt.className = `text-4xl md:text-6xl font-bold drop-shadow-md fantasy-font transform scale-150 transition-transform duration-300 ${colorClass}`;
+                el.classList.remove('opacity-0');
+                setTimeout(() => { el.classList.add('opacity-0'); }, 1500);
+            },
+
+            winGame() {
+                STATE.isPlaying = false;
+                this.stopFireTimer();
+                this.stopGameTimer();
+                sound.playVictory();
+                
+                // Calculate stars based on par time
+                const elapsed = (Date.now() - STATE.gameStartTime) / 1000;
+                let stars = 1;
+                if (elapsed <= STATE.parTime) stars = 3;
+                else if (elapsed <= STATE.parTime * 1.5) stars = 2;
+                
+                const timeStr = document.getElementById('game-timer').innerText;
+                this.showModal('win', {level: STATE.level, time: timeStr, stars: stars});
+            },
+
+            loseGame(reason) {
+                STATE.isPlaying = false;
+                this.stopFireTimer();
+                this.stopGameTimer();
+                
+                // Play burn sound specifically for fire death
+                if (reason.includes("Burned")) {
+                    sound.playBurn();
+                }
+                
+                this.showModal('lose', reason);
+            },
+
+            showModal(type, data) {
+                const modal = document.getElementById('main-modal');
+                const icon = document.getElementById('modal-icon');
+                const title = document.getElementById('modal-title');
+                const body = document.getElementById('modal-body');
+                const btn = document.getElementById('modal-btn');
+                
+                modal.classList.remove('hidden');
+                
+                if (type === 'welcome') {
+                    icon.innerHTML = '<i class="fas fa-chess-knight text-cyan-500"></i><i class="fas fa-chess-king text-rose-500"></i>';
+                    title.innerText = "Chess Tourmaster";
+                    body.innerHTML = "Navigate the board. Clear every tile. Capture the King.";
+                    btn.innerText = "Start Game";
+                    btn.dataset.action = "start";
+                } else if (type === 'win') {
+                    icon.innerHTML = '<i class="fas fa-crown text-yellow-400"></i>';
+                    
+                    // Generate Star HTML
+                    let starHtml = '<div class="flex justify-center gap-2 mb-2 text-3xl">';
+                    for(let i=1; i<=3; i++) {
+                        if(i <= data.stars) starHtml += '<i class="fas fa-star text-yellow-400 star-pop" style="animation-delay: '+(i*0.1)+'s"></i>';
+                        else starHtml += '<i class="far fa-star text-gray-600"></i>';
+                    }
+                    starHtml += '</div>';
+                    
+                    title.innerText = "Checkmate!";
+                    body.innerHTML = `${starHtml}Level ${data.level} Complete<br><span class="text-xl font-bold text-cyan-400">Time: ${data.time}</span>`;
+                    btn.innerText = "Next Level";
+                    btn.dataset.action = "next";
+                } else if (type === 'lose') {
+                    icon.innerHTML = '<i class="fas fa-skull text-gray-500"></i>';
+                    title.innerText = "Defeat";
+                    body.innerText = data;
+                    btn.innerText = "Try Again";
+                    btn.dataset.action = "retry";
+                }
+            },
+
+            hideModal() {
+                document.getElementById('main-modal').classList.add('hidden');
+            }
+        };
+
+        function toggleHelp() { document.getElementById('help-modal').classList.toggle('hidden'); }
+        window.onload = () => game.init();
+
+    </script>
+</body>
+</html>
