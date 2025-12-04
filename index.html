@@ -120,6 +120,93 @@
             border: 1px solid rgba(255, 255, 255, 0.15); 
         }
 
+        /* --- THEME-SPECIFIC BOARD STYLING --- */
+
+        /* Cosmic Theme (Default) */
+        .bg-theme-cosmic #game-board {
+            background-image: repeating-linear-gradient(45deg, #1e293b 25%, transparent 25%, transparent 75%, #1e293b 75%, #1e293b), repeating-linear-gradient(45deg, #1e293b 25%, #0f172a 25%, #0f172a 75%, #1e293b 75%, #1e293b);
+        }
+        .bg-theme-cosmic .tile:not(.visited):not(.king-tile) {
+            background-color: #334155; /* Slate 700 */
+        }
+        .bg-theme-cosmic .tile:not(.visited):not(.king-tile):hover {
+            background-color: #475569; /* Slate 600 */
+        }
+
+        /* Royal Theme Board */
+        .bg-theme-royal #game-board {
+            background-image: repeating-linear-gradient(45deg, #37004d 25%, transparent 25%, transparent 75%, #37004d 75%, #37004d), repeating-linear-gradient(45deg, #37004d 25%, #1c0029 25%, #1c0029 75%, #37004d 75%, #37004d);
+        }
+        .bg-theme-royal .tile:not(.visited):not(.king-tile) {
+            background-color: #4a044e; /* Purple 900 */
+            border-color: #6d28d9;
+        }
+        .bg-theme-royal .tile:not(.visited):not(.king-tile):hover {
+            background-color: #6b21a8; /* Purple 800 */
+        }
+
+        /* Nature Theme Board */
+        .bg-theme-nature #game-board {
+            background-image: repeating-linear-gradient(45deg, #14532d 25%, transparent 25%, transparent 75%, #14532d 75%, #14532d), repeating-linear-gradient(45deg, #14532d 25%, #047857 25%, #047857 75%, #14532d 75%, #14532d);
+        }
+        .bg-theme-nature .tile:not(.visited):not(.king-tile) {
+            background-color: #065f46; /* Emerald 700 */
+            border-color: #10b981;
+        }
+        .bg-theme-nature .tile:not(.visited):not(.king-tile):hover {
+            background-color: #059669; /* Emerald 600 */
+        }
+
+        /* Inferno Theme Board */
+        .bg-theme-inferno #game-board {
+            background-image: repeating-linear-gradient(45deg, #7f1d1d 25%, transparent 25%, transparent 75%, #7f1d1d 75%, #7f1d1d), repeating-linear-gradient(45deg, #7f1d1d 25%, #450a0a 25%, #450a0a 75%, #7f1d1d 75%, #7f1d1d);
+        }
+        .bg-theme-inferno .tile:not(.visited):not(.king-tile) {
+            background-color: #b91c1c; /* Red 700 */
+            border-color: #f87171;
+        }
+        .bg-theme-inferno .tile:not(.visited):not(.king-tile):hover {
+            background-color: #dc2626; /* Red 600 */
+        }
+        
+        /* New: Desert Theme Board */
+        .bg-theme-desert #game-board {
+            background-image: repeating-linear-gradient(45deg, #78350f 25%, transparent 25%, transparent 75%, #78350f 75%, #78350f), repeating-linear-gradient(45deg, #78350f 25%, #4a2107 25%, #4a2107 75%, #78350f 75%, #78350f);
+        }
+        .bg-theme-desert .tile:not(.visited):not(.king-tile) {
+            background-color: #92400e; /* Amber 800 */
+            border-color: #fbbf24;
+        }
+        .bg-theme-desert .tile:not(.visited):not(.king-tile):hover {
+            background-color: #b45309; /* Amber 700 */
+        }
+        
+        /* New: Frost Theme Board */
+        .bg-theme-frost #game-board {
+            background-image: repeating-linear-gradient(45deg, #1e3a8a 25%, transparent 25%, transparent 75%, #1e3a8a 75%, #1e3a8a), repeating-linear-gradient(45deg, #1e3a8a 25%, #3b82f6 25%, #3b82f6 75%, #1e3a8a 75%, #1e3a8a);
+        }
+        .bg-theme-frost .tile:not(.visited):not(.king-tile) {
+            background-color: #60a5fa; /* Blue 400 */
+            border-color: #eff6ff;
+        }
+        .bg-theme-frost .tile:not(.visited):not(.king-tile):hover {
+            background-color: #3b82f6; /* Blue 500 */
+        }
+        
+        /* New: Volcanic Theme Board */
+        .bg-theme-volcanic #game-board {
+            background-image: repeating-linear-gradient(45deg, #3f3f46 25%, transparent 25%, transparent 75%, #3f3f46 75%, #3f3f46), repeating-linear-gradient(45deg, #3f3f46 25%, #18181b 25%, #18181b 75%, #3f3f46 75%, #3f3f46);
+        }
+        .bg-theme-volcanic .tile:not(.visited):not(.king-tile) {
+            background-color: #52525b; /* Zinc 600 */
+            border-color: #a1a1aa;
+        }
+        .bg-theme-volcanic .tile:not(.visited):not(.king-tile):hover {
+            background-color: #3f3f46; /* Zinc 700 */
+        }
+        /* --- END THEME-SPECIFIC BOARD STYLING --- */
+
+
         .tile.visited {
             background-color: #020617 !important; /* Slate 950 */
             border-color: #1e293b !important;
@@ -241,6 +328,17 @@
         .bg-theme-inferno {
             background: radial-gradient(circle at bottom, #7f1d1d 0%, #450a0a 100%);
         }
+        
+        /* New Background Themes */
+        .bg-theme-desert {
+            background: linear-gradient(to top, #92400e 0%, #4a2107 100%);
+        }
+        .bg-theme-frost {
+            background: linear-gradient(to top, #60a5fa 0%, #1e3a8a 100%);
+        }
+        .bg-theme-volcanic {
+            background: radial-gradient(circle at center, #3f3f46 0%, #18181b 100%);
+        }
 
         .theme-blob {
             position: absolute;
@@ -346,6 +444,9 @@
                 <button onclick="game.setTheme('royal')" class="p-3 rounded-lg bg-purple-900 border border-purple-700 hover:bg-purple-800 text-white text-sm">Royal</button>
                 <button onclick="game.setTheme('nature')" class="p-3 rounded-lg bg-emerald-900 border border-emerald-700 hover:bg-emerald-800 text-white text-sm">Nature</button>
                 <button onclick="game.setTheme('inferno')" class="p-3 rounded-lg bg-red-900 border border-red-700 hover:bg-red-800 text-white text-sm">Inferno</button>
+                <button onclick="game.setTheme('desert')" class="p-3 rounded-lg bg-yellow-800 border border-yellow-600 hover:bg-yellow-700 text-white text-sm">Desert</button>
+                <button onclick="game.setTheme('frost')" class="p-3 rounded-lg bg-blue-700 border border-blue-500 hover:bg-blue-600 text-white text-sm">Frost</button>
+                <button onclick="game.setTheme('volcanic')" class="p-3 rounded-lg bg-zinc-700 border border-zinc-500 hover:bg-zinc-600 text-white text-sm">Volcanic</button>
             </div>
             <button onclick="game.toggleSettings()" class="mt-6 w-full bg-slate-700 text-white py-2 rounded-lg hover:bg-slate-600 text-sm">Close</button>
         </div>
@@ -460,7 +561,11 @@
             cosmic: 'bg-theme-cosmic',
             royal: 'bg-theme-royal',
             nature: 'bg-theme-nature',
-            inferno: 'bg-theme-inferno'
+            inferno: 'bg-theme-inferno',
+            // NEW THEMES
+            desert: 'bg-theme-desert',
+            frost: 'bg-theme-frost',
+            volcanic: 'bg-theme-volcanic'
         };
 
         const game = {
@@ -928,7 +1033,13 @@
 
             setTheme(themeName) {
                 const body = document.getElementById('main-body');
+                // The body contains the background theme class
                 body.className = body.className.replace(/bg-theme-\w+/, THEMES[themeName]);
+                
+                // We also need to re-render the board to apply the specific tile/border colors 
+                // that are now tied to the body's theme class via CSS.
+                this.renderBoard(); 
+                
                 this.toggleSettings();
             },
 
@@ -957,13 +1068,15 @@
                         if (tileData.type === 'void') {
                             classes += "opacity-0 pointer-events-none"; zIndex = 0;
                         } else if (tileData.type === 'king') {
-                            classes += "bg-slate-800/80 king-tile"; zIndex = 20;
+                            classes += "king-tile"; // Board BG will style this
                             
                             if (canCaptureStyling) { // MODIFIED
                                 classes += ' valid-move !bg-rose-500/30';
                             }
                         } else {
-                            classes += "bg-slate-700/80 hover:bg-slate-600/80 border-slate-600";
+                            // Removing hardcoded color classes here to rely solely on theme-specific CSS selectors
+                            // The CSS now uses .bg-theme-X .tile:not(.visited)
+                            classes += "border-slate-600"; 
                         }
 
                         if (tileData.visited && !(r===STATE.knightPos.r && c===STATE.knightPos.c)) {
