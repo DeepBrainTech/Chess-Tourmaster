@@ -5,6 +5,87 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Chess Tourmaster</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Parse hash parameters (#token=...&locale=...)
+        function getHashParams() {
+            const hash = window.location.hash.substring(1);
+            const params = {};
+            hash.split('&').forEach(part => {
+                const [key, value] = part.split('=');
+                params[key] = decodeURIComponent(value);
+            });
+            return params;
+        }
+
+        // Extract token
+        const params = getHashParams();
+        const jwtToken = params.token;
+
+        if (!jwtToken) {
+            alert("No token provided");
+        }
+        // -----------------------------
+        // Decode the JWT payload
+        // -----------------------------
+        function decodeJwt(token) {
+            try {
+                const payload = token.split('.')[1];
+                const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+                const json = decodeURIComponent(atob(base64).split('').map(c =>
+                    '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+                ).join(''));
+
+                return JSON.parse(json);
+            } catch (err) {
+                console.error("Error decoding JWT:", err);
+                return null;
+            }
+        }
+
+        const userData = decodeJwt(jwtToken);
+
+        console.log("Decoded Token: ", userData);
+
+        // -----------------------------
+        // Extract user data
+        // -----------------------------
+        let USER_ID = null;
+        let USERNAME = null;
+
+        if (userData) {
+            USER_ID = userData.user_id;
+            USERNAME = userData.username;
+        }
+
+        console.log("User ID:", USER_ID);
+        console.log("Username:", USERNAME);
+        function saveProgress(progressObj) {
+            if (!USER_ID) return;
+            const key = `tourmaster_progress_${USER_ID}`;
+            // Save the high score, which represents the highest cumulative *base* score achieved
+            localStorage.setItem(key, JSON.stringify({ highScore: progressObj.highScore }));
+            console.log("Progress saved:", progressObj);
+        }
+
+        function loadProgress() {
+            if (!USER_ID) return null;
+            const key = `tourmaster_progress_${USER_ID}`;
+            const raw = localStorage.getItem(key);
+            if (!raw) return null;
+
+            try {
+                const data = JSON.parse(raw);
+                console.log("Loaded progress:", data);
+                // Load high score
+                return {
+                    highScore: data.highScore || 0,
+                };
+            } catch (e) {
+                console.error("Error loading saved progress:", e);
+                return null;
+            }
+        }
+    </script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lato:wght@400;700&display=swap');
@@ -99,6 +180,22 @@
             box-shadow: 0 0 20px rgba(225, 29, 72, 0.3);
             background-color: #3f1018 !important; /* Dark Red BG */
         }
+        
+        /* Quest Tile Value Styling */
+        .quest-value {
+            position: absolute;
+            top: 2px;
+            right: 4px;
+            font-size: 0.75rem; /* text-xs */
+            font-weight: bold;
+            color: #fcd34d; /* Amber 300 */
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+            transition: transform 0.2s;
+        }
+        .valid-move .quest-value {
+            transform: scale(1.1);
+            color: #4ade80; /* Green highlight */
+        }
 
         /* Star Animation */
         .star-pop {
@@ -160,25 +257,30 @@
 </head>
 <body id="main-body" class="h-screen w-screen flex flex-col items-center justify-center relative overflow-hidden bg-theme-cosmic">
 
-    <!-- Background Elements (Dynamic) -->
+    <div id="player-info" style="position:absolute; top:10px; left:10px; color:white; font-size:18px;"></div>
+
     <div id="bg-blobs" class="absolute inset-0 z-0 pointer-events-none overflow-hidden">
         <div class="theme-blob w-96 h-96 bg-cyan-500 top-0 left-0"></div>
         <div class="theme-blob w-96 h-96 bg-purple-500 bottom-0 right-0 animation-delay-2000"></div>
     </div>
 
-    <!-- UI Header -->
     <div class="z-10 w-full max-w-2xl px-4 mb-2 flex justify-between items-center">
         <div>
             <h1 class="text-xl md:text-3xl text-rose-500 font-bold fantasy-font tracking-wider shadow-black drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
                 <i class="fas fa-chess-board mr-2"></i>Tourmaster
             </h1>
             <div class="flex items-center gap-3 text-sm md:text-base text-gray-300 mt-1">
+                <span id="mode-display" class="font-bold text-white">Classic Tour</span>
+                <span class="text-gray-500">|</span>
                 <span>Lvl <span id="level-display" class="font-bold text-white">1</span></span>
                 <span class="text-gray-500">|</span>
                 <span class="font-mono text-cyan-300"><i class="far fa-clock mr-1"></i><span id="game-timer">00:00</span></span>
             </div>
         </div>
         <div class="flex gap-2">
+            <button onclick="game.showModeSelection(true)" class="bg-indigo-700/80 hover:bg-indigo-600 text-white p-2 rounded-lg shadow-lg border border-indigo-500" title="Change Mode">
+                <i class="fas fa-gamepad"></i>
+            </button>
             <button onclick="game.undo()" class="bg-slate-700/80 hover:bg-slate-600 text-white p-2 rounded-lg shadow-lg border border-slate-500" title="Undo">
                 <i class="fas fa-undo"></i>
             </button>
@@ -194,13 +296,15 @@
         </div>
     </div>
 
-    <!-- Stats Bar -->
-    <div class="z-10 w-full max-w-2xl px-4 mb-2 flex justify-between items-center h-8">
+    <div class="z-10 w-full max-w-2xl px-4 mb-2 flex flex-wrap justify-between items-center h-8">
         <div class="text-cyan-300 font-bold text-sm md:text-lg flex items-center bg-slate-900/50 px-3 py-1 rounded-full border border-slate-700">
             Tiles Left: <span id="tiles-left" class="ml-2 text-white">0</span>
         </div>
         
-        <!-- Fire Timer (Hidden by default) -->
+        <div id="quest-score-container" class="hidden text-amber-300 font-bold text-sm md:text-lg flex items-center bg-slate-900/50 px-3 py-1 rounded-full border border-slate-700">
+            Score: <span id="current-score" class="ml-1 text-white">0</span> / <span id="required-score" class="text-white">0</span>
+        </div>
+
         <div id="fire-timer-container" class="hidden flex items-center gap-2 text-orange-500 bg-black/60 px-3 py-1 rounded-full border border-orange-900/50">
             <i class="fas fa-fire animate-pulse"></i>
             <div class="w-24 h-3 bg-gray-800 rounded-full overflow-hidden border border-orange-900 shadow-inner">
@@ -209,39 +313,31 @@
         </div>
     </div>
 
-    <!-- Game Board Container -->
     <div class="z-10 relative bg-slate-800/60 p-2 md:p-3 rounded-xl shadow-2xl border-4 border-slate-600 backdrop-blur-md w-full max-w-[95vw] md:max-w-2xl aspect-square flex items-center justify-center mx-auto">
-        <!-- Board -->
         <div id="game-board" class="grid gap-1 bg-slate-900 p-2 rounded-lg select-none w-full h-full">
-            <!-- Tiles generated by JS -->
-        </div>
+            </div>
         
-        <!-- Overlay Message -->
         <div id="message-overlay" class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 transition-opacity duration-300 z-50">
             <h2 class="text-4xl md:text-6xl font-bold text-white drop-shadow-[0_4px_4px_rgba(0,0,0,0.9)] fantasy-font transform scale-150 transition-transform duration-300 text-center px-4" id="message-text"></h2>
         </div>
     </div>
 
-    <!-- Footer Controls -->
     <div class="z-10 mt-4 text-center text-gray-400 text-xs">
-        <p>Goal: Clear board &rarr; Capture <span class="text-rose-500 font-bold">King</span></p>
+        <p id="footer-goal">Goal: Clear board &rarr; Capture <span class="text-rose-500 font-bold">King</span></p>
     </div>
 
-    <!-- Modals -->
-    
-    <!-- Main Modal (Start/Win/Lose) -->
     <div id="main-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop hidden">
         <div class="bg-gray-800 border-2 border-rose-600 p-6 md:p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center m-4 relative">
             <div class="mb-4 text-6xl flex justify-center gap-4" id="modal-icon"></div>
             <h2 id="modal-title" class="text-3xl font-bold text-white mb-2 fantasy-font"></h2>
             <div id="modal-body" class="text-gray-300 mb-6 text-sm"></div>
+            <div id="high-score-display" class="text-lg font-mono text-yellow-300 mb-4 fantasy-font hidden"></div> 
             <button id="modal-btn" class="w-full bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 text-white font-bold py-3 rounded-xl shadow-lg transition transform hover:scale-105">
                 Action
             </button>
         </div>
     </div>
 
-    <!-- Settings Modal -->
     <div id="settings-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop hidden" onclick="game.toggleSettings()">
         <div class="bg-gray-800 border-2 border-indigo-500 p-6 rounded-2xl shadow-2xl max-w-xs w-full m-4" onclick="event.stopPropagation()">
             <h3 class="text-xl font-bold text-indigo-400 mb-4 fantasy-font text-center">Select Theme</h3>
@@ -255,21 +351,18 @@
         </div>
     </div>
 
-    <!-- Help Modal -->
     <div id="help-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop hidden" onclick="toggleHelp()">
         <div class="bg-slate-800 border-2 border-slate-500 p-6 rounded-2xl shadow-2xl max-w-sm w-full m-4" onclick="event.stopPropagation()">
-            <h3 class="text-2xl font-bold text-rose-500 mb-4 fantasy-font border-b border-slate-600 pb-2">Instructions</h3>
-            <ul class="text-left text-gray-300 space-y-3 text-sm">
-                <li class="flex items-start"><i class="fas fa-chess-knight w-6 text-cyan-400 mt-1"></i> <span><strong>Move:</strong> L-shape jump.</span></li>
-                <li class="flex items-start"><i class="fas fa-eraser w-6 text-slate-400 mt-1"></i> <span><strong>Clear:</strong> Tiles vanish upon leaving.</span></li>
-                <li class="flex items-start"><i class="fas fa-fire w-6 text-orange-500 mt-1"></i> <span><strong>Fire:</strong> 3s to move or burn!</span></li>
-                <li class="flex items-start"><i class="fas fa-chess-king w-6 text-rose-500 mt-1"></i> <span><strong>Win:</strong> Capture King when tiles = 0.</span></li>
-            </ul>
+            <h3 class="text-2xl font-bold text-rose-500 mb-4 fantasy-font border-b border-slate-600 pb-2" id="help-modal-title">Instructions (Classic Tour)</h3>
+            <ul id="help-modal-body" class="text-left text-gray-300 space-y-3 text-sm">
+                </ul>
             <button onclick="toggleHelp()" class="mt-6 w-full bg-slate-700 text-white py-2 rounded-lg">Close</button>
         </div>
     </div>
 
     <script>
+        document.getElementById("player-info").innerText = `Player: ${USERNAME}`;
+        
         // --- Sound Manager ---
         const sound = {
             ctx: null,
@@ -292,9 +385,11 @@
                 osc.stop(this.ctx.currentTime + duration);
             },
             playMove() {
-                // Whoosh/Plop
                 this.playTone(300, 'sine', 0.15, 0.2);
-                setTimeout(() => this.playTone(100, 'square', 0.2, 0.1), 100); // Crumble effect
+                setTimeout(() => this.playTone(100, 'square', 0.2, 0.1), 100); 
+            },
+            playCollect() {
+                this.playTone(880, 'sine', 0.08, 0.2);
             },
             playVictory() {
                 if (!this.ctx) this.init();
@@ -306,12 +401,11 @@
             },
             playBurn() {
                 this.speak("You are cooked");
-                // Fizzle sound
                 this.playTone(100, 'sawtooth', 0.5, 0.2);
             },
             speak(text) {
                 if ('speechSynthesis' in window) {
-                    window.speechSynthesis.cancel(); // Prioritize new message
+                    window.speechSynthesis.cancel();
                     const msg = new SpeechSynthesisUtterance(text);
                     msg.rate = 1.2; 
                     msg.pitch = 1.0;
@@ -325,7 +419,7 @@
             gridSize: 5, 
             maxLevel: 10,
             fireTimeLimit: 3000, 
-            fireChance: 0.15 
+            fireChance: 0.15,
         };
 
         const STATE = {
@@ -335,14 +429,25 @@
             kingPos: { r: 0, c: 0 },
             history: [], 
             tilesLeft: 0,
-            parTime: 10, // Seconds for 3 stars
+            parTime: 10, 
             isPlaying: false,
             fireTimer: null,
             fireStartTime: 0,
-            lastFireSecond: 4, // Track last spoken countdown second
+            lastFireSecond: 4, 
             gridSizeVal: 5,
             gameStartTime: 0,
-            gameTimeInterval: null
+            gameTimeInterval: null,
+            gameMode: 'classic', 
+            currentScore: 0, // Math Tour score for CURRENT LEVEL
+            requiredScore: 0,
+            tileValues: [],
+            scoreMultiplier: 1, 
+            
+            // --- UPDATED SCORING VARIABLES ---
+            currentRunScore: 0,        // Total score for the current streak run (resets on loss)
+            cumulativeBaseScore: 0,    // Total score accumulated from level bonuses only (persists across retries)
+            highScore: 0,              // Highest cumulativeBaseScore ever achieved
+            streak: 0,                 // Consecutive level completion streak (resets on loss)
         };
 
         const ICONS = {
@@ -361,12 +466,23 @@
         const game = {
             init() {
                 this.bindEvents();
-                this.showModal('welcome');
+                this.loadGlobalScore(); 
+                this.showModeSelection();
+            },
+
+            loadGlobalScore() { 
+                const progress = loadProgress();
+                if (progress && progress.highScore) {
+                    STATE.highScore = progress.highScore;
+                }
+                // Reset session scores for a new application load
+                STATE.currentRunScore = 0; 
+                STATE.cumulativeBaseScore = 0; 
+                STATE.streak = 0;
             },
 
             bindEvents() {
                 document.getElementById('modal-btn').addEventListener('click', () => {
-                    // Init sound on first interaction
                     if (!sound.ctx) sound.init();
                     
                     const type = document.getElementById('modal-btn').dataset.action;
@@ -375,6 +491,70 @@
                     else this.startLevel(1);
                     this.hideModal();
                 });
+            },
+            
+            // --- Mode Selection & Setup ---
+            showModeSelection(isChanging=false) {
+                if (isChanging) this.stopGameTimer(); 
+                STATE.isPlaying = false;
+                
+                const modal = document.getElementById('main-modal');
+                const icon = document.getElementById('modal-icon');
+                const title = document.getElementById('modal-title');
+                const body = document.getElementById('modal-body');
+                const btn = document.getElementById('modal-btn');
+                const highScoreDisplay = document.getElementById('high-score-display'); 
+
+                modal.classList.remove('hidden');
+                btn.classList.add('hidden');
+                highScoreDisplay.classList.add('hidden'); 
+
+                icon.innerHTML = '<i class="fas fa-chess-knight text-cyan-500"></i><i class="fas fa-chess-king text-rose-500"></i>';
+                title.innerText = "Chess Tourmaster";
+                body.innerHTML = `
+                    <p class="text-sm text-gray-400 mb-4">${isChanging ? 'Game paused. Select a new mode to start over:' : 'Select your game mode:'}</p>
+                    <div class="space-y-3">
+                        <button onclick="game.setGameMode('classic')" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl transition">
+                            Classic Tour
+                        </button>
+                        <button onclick="game.setGameMode('math_tour')" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 rounded-xl transition">
+                            Math Tour
+                        </button>
+                    </div>
+                `;
+            },
+            
+            setGameMode(mode) {
+                STATE.gameMode = mode;
+                STATE.level = 1;
+                STATE.scoreMultiplier = 1; 
+                
+                // Reset all scores and streak for a new run
+                STATE.currentRunScore = 0;
+                STATE.cumulativeBaseScore = 0; 
+                STATE.streak = 0; 
+                
+                document.getElementById('main-modal').classList.add('hidden');
+                
+                this.updateUI(); 
+                this.updateUIModeVisibility();
+                this.updateHelpModal();
+                this.showModal('welcome');
+            },
+            
+            updateUIModeVisibility() {
+                const isMathTour = STATE.gameMode === 'math_tour';
+                // Toggle Score Bar
+                const scoreContainer = document.getElementById('quest-score-container');
+                isMathTour ? scoreContainer.classList.remove('hidden') : scoreContainer.classList.add('hidden');
+                
+                // Update Mode Display
+                document.getElementById('mode-display').innerText = isMathTour ? 'Math Tour' : 'Classic Tour';
+                
+                // Update Footer Goal
+                document.getElementById('footer-goal').innerHTML = isMathTour 
+                    ? 'Goal: Collect score &rarr; Capture <span class="text-rose-500 font-bold">King</span>' // MODIFIED
+                    : 'Goal: Clear board &rarr; Capture <span class="text-rose-500 font-bold">King</span>';
             },
 
             // --- Level Generation ---
@@ -386,14 +566,12 @@
                 const size = STATE.gridSizeVal;
                 STATE.grid = Array(size).fill().map(() => Array(size).fill(null));
 
-                // Determine max path length based on level to control difficulty
-                let maxPathLength;
-                if (levelNum === 1) maxPathLength = 5;       // Level 1: Very easy (5 squares total)
-                else if (levelNum === 2) maxPathLength = 8;  // Level 2: Easy (8 squares)
-                else if (levelNum === 3) maxPathLength = 12; // Level 3: Moderate
-                else if (levelNum === 4) maxPathLength = 18; // Level 4: Challenging
-                else maxPathLength = size * size;            // Level 5+: Full board attempt
-
+                let maxPathLength = size * size; 
+                if (levelNum === 1) maxPathLength = 5;      
+                else if (levelNum === 2) maxPathLength = 8; 
+                else if (levelNum === 3) maxPathLength = 12; 
+                else if (levelNum === 4) maxPathLength = 18; 
+                
                 let cr = Math.floor(Math.random() * size);
                 let cc = Math.floor(Math.random() * size);
                 STATE.kingPos = { r: cr, c: cc };
@@ -403,11 +581,9 @@
                 genGrid[cr][cc] = 1;
 
                 let curr = {r: cr, c: cc};
-                let totalSquares = size * size;
-                let attempts = 0;
+                let attempts = 1000;
                 
-                // Use maxPathLength to stop generation early for low levels
-                while (path.length < maxPathLength && attempts < 1000) {
+                while (path.length < maxPathLength && attempts > 0) {
                     let moves = this.getValidMoves(curr.r, curr.c, size);
                     let validNext = moves.filter(m => genGrid[m.r][m.c] === 0);
                     if (validNext.length === 0) break;
@@ -415,10 +591,37 @@
                     genGrid[next.r][next.c] = 1;
                     path.push(next);
                     curr = next;
+                    attempts--;
                 }
-
+                if (path.length < maxPathLength) {
+                    curr = path[Math.floor(Math.random() * path.length)];
+                    attempts = 1000;
+                    while (path.length < maxPathLength && attempts > 0) {
+                        let moves = this.getValidMoves(curr.r, curr.c, size);
+                        let validNext = moves.filter(m => genGrid[m.r][m.c] === 0);
+                        if (validNext.length === 0) {
+                            curr = path[Math.floor(Math.random() * path.length)];
+                            attempts--;
+                            continue;
+                        }
+                        let next = validNext[Math.floor(Math.random() * validNext.length)];
+                        genGrid[next.r][next.c] = 1;
+                        path.push(next);
+                        curr = next;
+                        attempts--;
+                    }
+                }
+                
                 STATE.knightPos = { ...curr };
                 
+                const isMathTour = STATE.gameMode === 'math_tour';
+                STATE.tileValues = [];
+                STATE.currentScore = 0; 
+                STATE.scoreMultiplier = 1; 
+                const pathTilesCount = path.length;
+                
+                let maxPossibleBaseScore = 0;
+
                 for(let r=0; r<size; r++) {
                     for(let c=0; c<size; c++) {
                         let type = 'empty';
@@ -429,14 +632,51 @@
                         let isPath = genGrid[r][c] === 1;
                         let isStart = (r === STATE.knightPos.r && c === STATE.knightPos.c);
                         let isKing = (r === STATE.kingPos.r && c === STATE.kingPos.c);
-                        
+                        let value = 0;
+
                         if (isPath && !isStart && !isKing) {
                             if (Math.random() < (0.05 + (levelNum * 0.02))) hasFire = true;
+                            if (isMathTour) {
+                                value = Math.floor(Math.random() * 4) + 2; 
+                                maxPossibleBaseScore += value; 
+                            }
                         }
 
-                        STATE.grid[r][c] = { type: type, hasFire: hasFire, visited: false, r: r, c: c };
+                        STATE.grid[r][c] = { 
+                            type: type, 
+                            hasFire: hasFire, 
+                            visited: false, 
+                            r: r, 
+                            c: c,
+                            value: value,
+                        };
                     }
                 }
+                
+                if (isMathTour) {
+                    const numPointTiles = pathTilesCount - 2; 
+                    let requiredScoreMultiplier = 4;
+    
+                    if (levelNum === 1) {
+                        requiredScoreMultiplier = 2; 
+                    }
+
+                    let targetRequiredScore = Math.ceil(numPointTiles * requiredScoreMultiplier);
+                    
+                    STATE.requiredScore = Math.min(targetRequiredScore, maxPossibleBaseScore);
+                    STATE.requiredScore = Math.max(1, STATE.requiredScore);
+
+                    STATE.currentScore += STATE.grid[STATE.knightPos.r][STATE.knightPos.c].value;
+                    STATE.grid[STATE.knightPos.r][STATE.knightPos.c].value = 0; 
+                } else {
+                    STATE.requiredScore = 0;
+                    STATE.currentScore = 0;
+                }
+                
+                STATE.grid[STATE.kingPos.r][STATE.kingPos.c].type = 'king';
+                STATE.grid[STATE.kingPos.r][STATE.kingPos.c].hasFire = false;
+                
+                STATE.grid[STATE.knightPos.r][STATE.knightPos.c].visited = true;
 
                 STATE.tilesLeft = 0;
                 for(let r=0; r<size; r++){
@@ -446,12 +686,9 @@
                         }
                     }
                 }
-                STATE.tilesLeft--; 
+                STATE.tilesLeft--;
                 
-                // Calculate Par Time (3 seconds per tile minimum)
                 STATE.parTime = Math.max(5, STATE.tilesLeft * 2.5);
-
-                STATE.grid[STATE.knightPos.r][STATE.knightPos.c].visited = true;
 
                 STATE.history = [];
                 STATE.isPlaying = true;
@@ -463,11 +700,23 @@
             },
 
             startLevel(lvl) {
+                // When starting level 1, ensure scores are reset for a NEW RUN
+                if (lvl === 1) {
+                    STATE.currentRunScore = 0;
+                    STATE.cumulativeBaseScore = 0; 
+                    STATE.streak = 0;
+                }
                 this.generateLevel(lvl);
                 document.getElementById('level-display').innerText = lvl;
             },
             nextLevel() { this.startLevel(STATE.level + 1); },
-            restartLevel() { this.startLevel(STATE.level); },
+            restartLevel() { 
+                // Don't touch STATE.cumulativeBaseScore on a retry
+                // Reset streak and current run score for a retry
+                STATE.currentRunScore = STATE.cumulativeBaseScore; // Start with accumulated base score
+                STATE.streak = 0; // Streak restarts on a retry
+                this.startLevel(STATE.level); 
+            },
 
             getValidMoves(r, c, size) {
                 const moves = [
@@ -491,28 +740,74 @@
                 }
 
                 const targetTile = STATE.grid[r][c];
+                const isMathTour = STATE.gameMode === 'math_tour';
 
                 if (targetTile.type === 'void' || targetTile.visited) {
                     this.triggerShake(); return;
                 }
 
                 if (targetTile.type === 'king') {
-                    if (STATE.tilesLeft > 0) {
+                    const hasClearedTiles = STATE.tilesLeft === 0;
+
+                    // Classic Tour check: Must clear all tiles before capturing King
+                    if (STATE.gameMode === 'classic' && !hasClearedTiles) { // MODIFIED CHECK
                         this.showMessage("Guards remain!", "text-rose-400");
                         this.triggerShake();
                         return;
+                    } 
+                    
+                    if (isMathTour) {
+                        const hasEnoughScore = STATE.currentScore >= STATE.requiredScore;
+                        if (!hasEnoughScore) {
+                            this.showMessage(`Need ${STATE.requiredScore - STATE.currentScore} more score!`, "text-amber-400");
+                            this.triggerShake();
+                            return;
+                        }
+                    }
+                    
+                    this.winGame();
+                    return;
+                }
+
+                sound.playMove(); 
+                
+                const collectedValue = targetTile.value; 
+                let finalScore = 0;
+                
+                const multiplierUsed = STATE.scoreMultiplier; 
+                let multiplierAfterMove = 1;
+
+                if (isMathTour) {
+                    finalScore = collectedValue * multiplierUsed; 
+                    
+                    if (targetTile.hasFire) {
+                        multiplierAfterMove = 2; 
+                        this.showMessage("x2 Score Multiplier Active!", "text-orange-400");
                     } else {
-                        this.winGame();
-                        return;
+                        multiplierAfterMove = 1; 
                     }
                 }
 
-                sound.playMove(); // Play move sound
-                STATE.history.push({ knightPos: { ...curr }, prevPos: { r, c } });
+                STATE.history.push({ 
+                    knightPos: { ...curr }, 
+                    prevPos: { r, c },
+                    scoreCollected: finalScore, 
+                    valueRestored: collectedValue, 
+                    multiplierUsed: multiplierUsed,
+                });
 
                 this.stopFireTimer();
                 STATE.knightPos = { r, c };
                 targetTile.visited = true;
+                
+                if (isMathTour) {
+                    STATE.currentScore += finalScore;
+                    targetTile.value = 0; 
+                    STATE.scoreMultiplier = multiplierAfterMove;
+
+                    if (finalScore > 0) sound.playCollect();
+                }
+
                 STATE.tilesLeft--;
 
                 this.renderBoard();
@@ -526,6 +821,13 @@
                 const lastState = STATE.history.pop();
                 STATE.knightPos = lastState.knightPos;
                 const tile = STATE.grid[lastState.prevPos.r][lastState.prevPos.c];
+                
+                if (STATE.gameMode === 'math_tour') {
+                    tile.value = lastState.valueRestored;
+                    STATE.currentScore -= lastState.scoreCollected;
+                    STATE.scoreMultiplier = lastState.multiplierUsed; 
+                }
+
                 tile.visited = false; 
                 STATE.tilesLeft++;
                 this.stopFireTimer();
@@ -561,7 +863,7 @@
                 if (tile.hasFire) {
                     document.getElementById('fire-timer-container').classList.remove('hidden');
                     STATE.fireStartTime = Date.now();
-                    STATE.lastFireSecond = 4; // Reset countdown tracker
+                    STATE.lastFireSecond = 4;
                     
                     const updateTimer = () => {
                         if (!STATE.isPlaying) return;
@@ -571,7 +873,6 @@
                         
                         document.getElementById('fire-bar').style.width = pct + "%";
 
-                        // Speak Countdown
                         const seconds = Math.ceil(remaining / 1000);
                         if (seconds < STATE.lastFireSecond && seconds > 0) {
                             sound.speak(seconds.toString());
@@ -584,7 +885,7 @@
                     STATE.fireTimer = requestAnimationFrame(updateTimer);
                 } else {
                     document.getElementById('fire-timer-container').classList.add('hidden');
-                    window.speechSynthesis.cancel(); // Stop counting if safe
+                    window.speechSynthesis.cancel();
                 }
             },
 
@@ -595,15 +896,28 @@
             },
 
             checkStuck() {
-                if (STATE.tilesLeft === 0) return; 
+                const isMathTour = STATE.gameMode === 'math_tour';
+                // Removed the initial 'isReadyToCapture' check as it's no longer necessary or accurate for Math Tour.
+                
                 const curr = STATE.knightPos;
                 const moves = this.getValidMoves(curr.r, curr.c, STATE.gridSizeVal);
                 const canMove = moves.some(m => {
                     const t = STATE.grid[m.r][m.c];
                     if (t.type === 'void' || t.visited) return false;
-                    if (t.type === 'king') return false; 
+                    
+                    if (t.type === 'king') {
+                        const scoreCheck = isMathTour ? (STATE.currentScore >= STATE.requiredScore) : true;
+                        
+                        // Capture logic: Math Tour only requires score. Classic Tour requires cleared tiles and score.
+                        const captureCondition = isMathTour 
+                            ? scoreCheck 
+                            : (STATE.tilesLeft === 0 && scoreCheck);
+                        
+                        return captureCondition;
+                    }
                     return true;
                 });
+                
                 if (!canMove) setTimeout(() => this.loseGame("Trapped!"), 500);
             },
 
@@ -623,6 +937,15 @@
                 const size = STATE.gridSizeVal;
                 board.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
                 board.innerHTML = '';
+                
+                const isMathTour = STATE.gameMode === 'math_tour';
+                const hasEnoughScore = isMathTour ? (STATE.currentScore >= STATE.requiredScore) : true;
+
+                // Logic for King tile styling (highlighting when capture is possible)
+                const canCaptureStyling = STATE.gameMode === 'math_tour'
+                    ? hasEnoughScore
+                    : (STATE.tilesLeft === 0 && hasEnoughScore);
+
 
                 for(let r=0; r<size; r++) {
                     for(let c=0; c<size; c++) {
@@ -635,6 +958,10 @@
                             classes += "opacity-0 pointer-events-none"; zIndex = 0;
                         } else if (tileData.type === 'king') {
                             classes += "bg-slate-800/80 king-tile"; zIndex = 20;
+                            
+                            if (canCaptureStyling) { // MODIFIED
+                                classes += ' valid-move !bg-rose-500/30';
+                            }
                         } else {
                             classes += "bg-slate-700/80 hover:bg-slate-600/80 border-slate-600";
                         }
@@ -648,9 +975,15 @@
                             const dc = Math.abs(STATE.knightPos.c - c);
                             const isKnightMove = (dr === 2 && dc === 1) || (dr === 1 && dc === 2);
                             let isDest = false;
+                            
                             if (isKnightMove && !tileData.visited && tileData.type !== 'void') {
                                 if (tileData.type === 'king') {
-                                    if (STATE.tilesLeft === 0) isDest = true;
+                                    // Valid move check for King tile
+                                    const captureCondition = STATE.gameMode === 'math_tour' 
+                                        ? hasEnoughScore 
+                                        : (STATE.tilesLeft === 0 && hasEnoughScore);
+                                        
+                                    if (captureCondition) isDest = true;
                                 } else {
                                     isDest = true;
                                 }
@@ -666,6 +999,11 @@
                         el.style.zIndex = zIndex; 
 
                         let content = '';
+                        if (isMathTour && tileData.value > 0) {
+                            const displayMultiplier = STATE.scoreMultiplier > 1 ? `x${STATE.scoreMultiplier}` : '';
+                            content += `<span class="quest-value">+${tileData.value}${displayMultiplier}</span>`;
+                        }
+                        
                         if (tileData.hasFire) content += ICONS.fire;
                         if (tileData.type === 'king') content += ICONS.king;
                         
@@ -683,6 +1021,39 @@
 
             updateUI() {
                 document.getElementById('tiles-left').innerText = STATE.tilesLeft;
+                
+                if (STATE.gameMode === 'math_tour') {
+                    document.getElementById('current-score').innerText = STATE.currentScore;
+                    document.getElementById('required-score').innerText = STATE.requiredScore;
+                    
+                    const scoreContainer = document.getElementById('quest-score-container');
+                    if (STATE.currentScore >= STATE.requiredScore) {
+                        scoreContainer.classList.remove('text-amber-300');
+                        scoreContainer.classList.add('text-lime-400');
+                    } else {
+                        scoreContainer.classList.add('text-amber-300');
+                        scoreContainer.classList.remove('text-lime-400');
+                    }
+                }
+            },
+
+            updateHelpModal() {
+                const isMathTour = STATE.gameMode === 'math_tour';
+                document.getElementById('help-modal-title').innerText = isMathTour ? "Instructions (Math Tour)" : "Instructions (Classic Tour)";
+                const ul = document.getElementById('help-modal-body');
+                
+                let fireRule = `
+                    <li class="flex items-start"><i class="fas fa-fire w-6 text-orange-500 mt-1"></i> 
+                    <span><strong>Fire:</strong> 3s to move or burn! (In Math Tour, landing on fire grants x2 score on the next move).</span></li>
+                `;
+                
+                let helpHtml = `
+                    <li class="flex items-start"><i class="fas fa-chess-knight w-6 text-cyan-400 mt-1"></i> <span><strong>Move:</strong> L-shape jump to clear tiles.</span></li>
+                    ${isMathTour ? '<li class="flex items-start"><i class="fas fa-plus w-6 text-amber-400 mt-1"></i> <span>**Gather:** Collect tile points to meet score requirement for King capture.</span></li>' : ''}
+                    ${fireRule}
+                    <li class="flex items-start"><i class="fas fa-chess-king w-6 text-rose-500 mt-1"></i> <span><strong>Win:</strong> ${isMathTour ? 'Meet score requirement' : 'Clear board'} to capture King.</span></li>
+                `;
+                ul.innerHTML = helpHtml;
             },
 
             triggerShake() {
@@ -707,14 +1078,47 @@
                 this.stopGameTimer();
                 sound.playVictory();
                 
-                // Calculate stars based on par time
                 const elapsed = (Date.now() - STATE.gameStartTime) / 1000;
                 let stars = 1;
                 if (elapsed <= STATE.parTime) stars = 3;
                 else if (elapsed <= STATE.parTime * 1.5) stars = 2;
                 
                 const timeStr = document.getElementById('game-timer').innerText;
-                this.showModal('win', {level: STATE.level, time: timeStr, stars: stars});
+
+                // SCORING LOGIC
+                // 1. Calculate base level bonus score
+                const levelBonusScore = Math.floor(Math.random() * 501) + 500;
+
+                // 2. HIGH SCORE LOGIC: Accumulate the base score (persists across retries)
+                STATE.cumulativeBaseScore += levelBonusScore; 
+
+                // 3. STREAK LOGIC: Streak continues only on success
+                STATE.streak++;
+                const streakBonus = (STATE.streak - 1) * 100;
+
+                // 4. CURRENT RUN SCORE: Total score for this successful run (including streak)
+                STATE.currentRunScore += (levelBonusScore + streakBonus); 
+                
+                // 5. Check for New High Score (based on the base score accumulation)
+                let isNewHighScore = false;
+                if (STATE.cumulativeBaseScore > STATE.highScore) { 
+                    STATE.highScore = STATE.cumulativeBaseScore;
+                    isNewHighScore = true;
+                    // Save the new high score using the persistent cumulativeBaseScore
+                    saveProgress({ highScore: STATE.highScore }); 
+                }
+                
+                this.showModal('win', {
+                    level: STATE.level, 
+                    time: timeStr, 
+                    stars: stars,
+                    levelBonus: levelBonusScore, 
+                    currentScore: STATE.currentRunScore, // Display the full current run score
+                    baseScore: STATE.cumulativeBaseScore, // Display the new high score source
+                    isNewHighScore: isNewHighScore, 
+                    streak: STATE.streak,
+                    streakBonus: streakBonus,
+                });
             },
 
             loseGame(reason) {
@@ -722,10 +1126,13 @@
                 this.stopFireTimer();
                 this.stopGameTimer();
                 
-                // Play burn sound specifically for fire death
                 if (reason.includes("Burned")) {
                     sound.playBurn();
                 }
+
+                // Reset the streak-dependent score and streak, but KEEP the cumulativeBaseScore
+                STATE.currentRunScore = STATE.cumulativeBaseScore; // Score resets to accumulated base score
+                STATE.streak = 0; // Streak ends
                 
                 this.showModal('lose', reason);
             },
@@ -736,19 +1143,27 @@
                 const title = document.getElementById('modal-title');
                 const body = document.getElementById('modal-body');
                 const btn = document.getElementById('modal-btn');
+                const highScoreDisplay = document.getElementById('high-score-display'); 
                 
                 modal.classList.remove('hidden');
-                
+                highScoreDisplay.classList.add('hidden');
+
                 if (type === 'welcome') {
                     icon.innerHTML = '<i class="fas fa-chess-knight text-cyan-500"></i><i class="fas fa-chess-king text-rose-500"></i>';
-                    title.innerText = "Chess Tourmaster";
-                    body.innerHTML = "Navigate the board. Clear every tile. Capture the King.";
-                    btn.innerText = "Start Game";
+                    title.innerText = STATE.gameMode === 'math_tour' ? "Math Tour" : "Classic Tour";
+                    body.innerHTML = STATE.gameMode === 'math_tour' 
+                        ? "Collect enough score and capture the King."
+                        : "Clear every tile and capture the King.";
+                    btn.innerText = "Start Level 1";
                     btn.dataset.action = "start";
+                    btn.classList.remove('hidden');
+                    
+                    highScoreDisplay.innerHTML = `HIGH SCORE: ${STATE.highScore.toLocaleString()}`;
+                    highScoreDisplay.classList.remove('hidden'); 
+
                 } else if (type === 'win') {
                     icon.innerHTML = '<i class="fas fa-crown text-yellow-400"></i>';
                     
-                    // Generate Star HTML
                     let starHtml = '<div class="flex justify-center gap-2 mb-2 text-3xl">';
                     for(let i=1; i<=3; i++) {
                         if(i <= data.stars) starHtml += '<i class="fas fa-star text-yellow-400 star-pop" style="animation-delay: '+(i*0.1)+'s"></i>';
@@ -757,15 +1172,35 @@
                     starHtml += '</div>';
                     
                     title.innerText = "Checkmate!";
-                    body.innerHTML = `${starHtml}Level ${data.level} Complete<br><span class="text-xl font-bold text-cyan-400">Time: ${data.time}</span>`;
+                    
+                    let bodyContent = `
+                        ${starHtml}
+                        Level ${data.level} Complete<br>
+                        <span class="text-xl font-bold text-cyan-400">Time: ${data.time}</span>
+                        <div class="mt-4 border-t border-slate-700 pt-3">
+                            <p class="text-md text-gray-400">Level Bonus: <span class="text-lime-400 font-bold">+${data.levelBonus.toLocaleString()}</span></p>
+                            ${data.streak > 1 ? `<p class="text-md text-gray-400">Streak x${data.streak} Bonus: <span class="text-yellow-400 font-bold">+${data.streakBonus.toLocaleString()}</span></p>` : ''}
+                            <p class="text-xl font-bold text-yellow-300 mt-1">Total Score: ${data.currentScore.toLocaleString()}</p>
+                        </div>
+                    `;
+                    if (data.isNewHighScore) {
+                         bodyContent += `<p class="text-sm font-bold text-rose-500 mt-2">NEW HIGH SCORE! (Base: ${data.baseScore.toLocaleString()})</p>`;
+                    }
+                    body.innerHTML = bodyContent;
+                    
                     btn.innerText = "Next Level";
                     btn.dataset.action = "next";
+                    btn.classList.remove('hidden');
                 } else if (type === 'lose') {
                     icon.innerHTML = '<i class="fas fa-skull text-gray-500"></i>';
                     title.innerText = "Defeat";
                     body.innerText = data;
                     btn.innerText = "Try Again";
                     btn.dataset.action = "retry";
+                    btn.classList.remove('hidden');
+                    
+                    highScoreDisplay.innerHTML = `HIGH SCORE: ${STATE.highScore.toLocaleString()}`;
+                    highScoreDisplay.classList.remove('hidden');
                 }
             },
 
@@ -774,7 +1209,10 @@
             }
         };
 
-        function toggleHelp() { document.getElementById('help-modal').classList.toggle('hidden'); }
+        function toggleHelp() { 
+            game.updateHelpModal();
+            document.getElementById('help-modal').classList.toggle('hidden'); 
+        }
         window.onload = () => game.init();
 
     </script>
