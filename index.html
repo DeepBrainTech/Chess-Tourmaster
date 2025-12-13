@@ -22,7 +22,8 @@
         const jwtToken = params.token;
 
         if (!jwtToken) {
-            alert("No token provided");
+            // NOTE: Replaced alert with console message/dummy logic for deployment safety.
+            console.log("No token provided. Running in default mode.");
         }
         // -----------------------------
         // Decode the JWT payload
@@ -50,7 +51,7 @@
         // Extract user data
         // -----------------------------
         let USER_ID = null;
-        let USERNAME = null;
+        let USERNAME = "Guest";
 
         if (userData) {
             USER_ID = userData.user_id;
@@ -444,6 +445,7 @@
                 <button onclick="game.setTheme('royal')" class="p-3 rounded-lg bg-purple-900 border border-purple-700 hover:bg-purple-800 text-white text-sm">Royal</button>
                 <button onclick="game.setTheme('nature')" class="p-3 rounded-lg bg-emerald-900 border border-emerald-700 hover:bg-emerald-800 text-white text-sm">Nature</button>
                 <button onclick="game.setTheme('inferno')" class="p-3 rounded-lg bg-red-900 border border-red-700 hover:bg-red-800 text-white text-sm">Inferno</button>
+                <!-- NEW THEME BUTTONS -->
                 <button onclick="game.setTheme('desert')" class="p-3 rounded-lg bg-yellow-800 border border-yellow-600 hover:bg-yellow-700 text-white text-sm">Desert</button>
                 <button onclick="game.setTheme('frost')" class="p-3 rounded-lg bg-blue-700 border border-blue-500 hover:bg-blue-600 text-white text-sm">Frost</button>
                 <button onclick="game.setTheme('volcanic')" class="p-3 rounded-lg bg-zinc-700 border border-zinc-500 hover:bg-zinc-600 text-white text-sm">Volcanic</button>
@@ -544,6 +546,9 @@
             tileValues: [],
             scoreMultiplier: 1, 
             
+            // NEW: Stores the board configuration for level retries
+            savedGridConfig: null, 
+            
             // --- UPDATED SCORING VARIABLES ---
             currentRunScore: 0,        // Total score for the current streak run (resets on loss)
             cumulativeBaseScore: 0,    // Total score accumulated from level bonuses only (persists across retries)
@@ -562,7 +567,6 @@
             royal: 'bg-theme-royal',
             nature: 'bg-theme-nature',
             inferno: 'bg-theme-inferno',
-            // NEW THEMES
             desert: 'bg-theme-desert',
             frost: 'bg-theme-frost',
             volcanic: 'bg-theme-volcanic'
@@ -638,6 +642,7 @@
                 STATE.currentRunScore = 0;
                 STATE.cumulativeBaseScore = 0; 
                 STATE.streak = 0; 
+                STATE.savedGridConfig = null; // Clear saved state on mode change
                 
                 document.getElementById('main-modal').classList.add('hidden');
                 
@@ -662,14 +667,42 @@
                     : 'Goal: Clear board &rarr; Capture <span class="text-rose-500 font-bold">King</span>';
             },
 
-            // --- Level Generation ---
-            generateLevel(levelNum) {
-                STATE.level = levelNum;
-                STATE.gridSizeVal = levelNum > 5 ? 6 : 5;
-                if (levelNum > 8) STATE.gridSizeVal = 7;
+            // NEW: Private helper to handle the common state setup after generation/load
+            _startLevelProcess(config) {
+                STATE.level = config.level;
+                // Use a deep copy of the grid for the current game session
+                STATE.grid = config.grid.map(row => row.map(tile => ({ ...tile }))); 
+                STATE.knightPos = { ...config.knightPos };
+                STATE.kingPos = { ...config.kingPos };
+                STATE.gridSizeVal = config.gridSizeVal;
                 
-                const size = STATE.gridSizeVal;
-                STATE.grid = Array(size).fill().map(() => Array(size).fill(null));
+                STATE.tilesLeft = config.tilesLeft;
+                STATE.parTime = config.parTime;
+
+                // Reset transient state for the current run
+                STATE.currentScore = config.initialScore || 0; 
+                STATE.requiredScore = config.requiredScore;
+                STATE.scoreMultiplier = 1; // Always reset multiplier on restart
+                STATE.history = [];
+                
+                // Start the game loop
+                STATE.isPlaying = true;
+                this.stopFireTimer();
+                this.startGameTimer(); 
+                this.renderBoard();
+                this.updateUI();
+                this.checkFireLogic();
+            },
+
+            // NEW: Generates the entire board configuration and returns it (does not modify STATE)
+            _generateLevelConfig(levelNum) {
+                const config = { level: levelNum };
+
+                config.gridSizeVal = levelNum > 5 ? 6 : 5;
+                if (levelNum > 8) config.gridSizeVal = 7;
+                
+                const size = config.gridSizeVal;
+                config.grid = Array(size).fill().map(() => Array(size).fill(null));
 
                 let maxPathLength = size * size; 
                 if (levelNum === 1) maxPathLength = 5;      
@@ -679,7 +712,7 @@
                 
                 let cr = Math.floor(Math.random() * size);
                 let cc = Math.floor(Math.random() * size);
-                STATE.kingPos = { r: cr, c: cc };
+                config.kingPos = { r: cr, c: cc };
 
                 let genGrid = Array(size).fill().map(() => Array(size).fill(0));
                 let path = [{r: cr, c: cc}];
@@ -717,29 +750,26 @@
                     }
                 }
                 
-                STATE.knightPos = { ...curr };
+                config.knightPos = { ...curr };
                 
                 const isMathTour = STATE.gameMode === 'math_tour';
-                STATE.tileValues = [];
-                STATE.currentScore = 0; 
-                STATE.scoreMultiplier = 1; 
-                const pathTilesCount = path.length;
-                
                 let maxPossibleBaseScore = 0;
+                let tilesToVisit = 0;
 
                 for(let r=0; r<size; r++) {
                     for(let c=0; c<size; c++) {
                         let type = 'empty';
-                        if (r === STATE.kingPos.r && c === STATE.kingPos.c) type = 'king';
+                        if (r === config.kingPos.r && c === config.kingPos.c) type = 'king';
                         else if (genGrid[r][c] === 0) type = 'void';
                         
                         let hasFire = false;
                         let isPath = genGrid[r][c] === 1;
-                        let isStart = (r === STATE.knightPos.r && c === STATE.knightPos.c);
-                        let isKing = (r === STATE.kingPos.r && c === STATE.kingPos.c);
+                        let isStart = (r === config.knightPos.r && c === config.knightPos.c);
+                        let isKing = (r === config.kingPos.r && c === config.kingPos.c);
                         let value = 0;
 
                         if (isPath && !isStart && !isKing) {
+                            tilesToVisit++;
                             if (Math.random() < (0.05 + (levelNum * 0.02))) hasFire = true;
                             if (isMathTour) {
                                 value = Math.floor(Math.random() * 4) + 2; 
@@ -747,10 +777,11 @@
                             }
                         }
 
-                        STATE.grid[r][c] = { 
+                        config.grid[r][c] = { 
                             type: type, 
                             hasFire: hasFire, 
-                            visited: false, 
+                            // Mark starting position as visited in the config for accurate tile count/score calculation
+                            visited: (r === config.knightPos.r && c === config.knightPos.c), 
                             r: r, 
                             c: c,
                             value: value,
@@ -758,8 +789,14 @@
                     }
                 }
                 
+                // Final Config adjustments
+                config.tilesLeft = tilesToVisit;
+                config.parTime = Math.max(5, tilesToVisit * 2.5);
+                config.initialScore = 0;
+                config.requiredScore = 0;
+
                 if (isMathTour) {
-                    const numPointTiles = pathTilesCount - 2; 
+                    const numPointTiles = tilesToVisit; 
                     let requiredScoreMultiplier = 4;
     
                     if (levelNum === 1) {
@@ -768,59 +805,57 @@
 
                     let targetRequiredScore = Math.ceil(numPointTiles * requiredScoreMultiplier);
                     
-                    STATE.requiredScore = Math.min(targetRequiredScore, maxPossibleBaseScore);
-                    STATE.requiredScore = Math.max(1, STATE.requiredScore);
-
-                    STATE.currentScore += STATE.grid[STATE.knightPos.r][STATE.knightPos.c].value;
-                    STATE.grid[STATE.knightPos.r][STATE.knightPos.c].value = 0; 
-                } else {
-                    STATE.requiredScore = 0;
-                    STATE.currentScore = 0;
+                    config.requiredScore = Math.min(targetRequiredScore, maxPossibleBaseScore);
+                    config.requiredScore = Math.max(1, config.requiredScore);
+                    
+                    // Apply initial score/value change to starting tile
+                    config.initialScore += config.grid[config.knightPos.r][config.knightPos.c].value;
+                    config.grid[config.knightPos.r][config.knightPos.c].value = 0; 
                 }
-                
-                STATE.grid[STATE.kingPos.r][STATE.kingPos.c].type = 'king';
-                STATE.grid[STATE.kingPos.r][STATE.kingPos.c].hasFire = false;
-                
-                STATE.grid[STATE.knightPos.r][STATE.knightPos.c].visited = true;
 
-                STATE.tilesLeft = 0;
-                for(let r=0; r<size; r++){
-                    for(let c=0; c<size; c++){
-                        if (STATE.grid[r][c].type !== 'void' && STATE.grid[r][c].type !== 'king') {
-                            STATE.tilesLeft++;
-                        }
-                    }
-                }
-                STATE.tilesLeft--;
+                config.grid[config.kingPos.r][config.kingPos.c].type = 'king';
+                config.grid[config.kingPos.r][config.kingPos.c].hasFire = false;
                 
-                STATE.parTime = Math.max(5, STATE.tilesLeft * 2.5);
-
-                STATE.history = [];
-                STATE.isPlaying = true;
-                this.stopFireTimer();
-                this.startGameTimer(); 
-                this.renderBoard();
-                this.updateUI();
-                this.checkFireLogic();
+                return config;
             },
 
-            startLevel(lvl) {
-                // When starting level 1, ensure scores are reset for a NEW RUN
-                if (lvl === 1) {
-                    STATE.currentRunScore = 0;
-                    STATE.cumulativeBaseScore = 0; 
-                    STATE.streak = 0;
+            // MODIFIED: Accepts an optional flag to use the saved state
+            startLevel(lvl, useSaved = false) {
+                let config;
+                
+                if (useSaved && STATE.savedGridConfig && STATE.savedGridConfig.level === lvl) {
+                    // Use saved config for retry
+                    config = STATE.savedGridConfig;
+                } else {
+                    // Start new level: generate config and save it
+                    if (lvl === 1) {
+                        STATE.currentRunScore = 0;
+                        STATE.cumulativeBaseScore = 0; 
+                        STATE.streak = 0;
+                        STATE.savedGridConfig = null; // Ensure fresh start
+                    }
+                    config = this._generateLevelConfig(lvl);
+                    // Save a deep copy of the generated config for future retries
+                    STATE.savedGridConfig = JSON.parse(JSON.stringify(config)); 
                 }
-                this.generateLevel(lvl);
+                
+                this._startLevelProcess(config);
                 document.getElementById('level-display').innerText = lvl;
             },
-            nextLevel() { this.startLevel(STATE.level + 1); },
+            
+            // MODIFIED: Now calls startLevel with the useSaved=true flag
+            nextLevel() { 
+                STATE.savedGridConfig = null; // Clear saved config for the NEW level
+                this.startLevel(STATE.level + 1); 
+            },
+
             restartLevel() { 
                 // Don't touch STATE.cumulativeBaseScore on a retry
                 // Reset streak and current run score for a retry
                 STATE.currentRunScore = STATE.cumulativeBaseScore; // Start with accumulated base score
                 STATE.streak = 0; // Streak restarts on a retry
-                this.startLevel(STATE.level); 
+                // KEY CHANGE: Pass 'true' to use the saved config
+                this.startLevel(STATE.level, true); 
             },
 
             getValidMoves(r, c, size) {
@@ -1037,7 +1072,7 @@
                 body.className = body.className.replace(/bg-theme-\w+/, THEMES[themeName]);
                 
                 // We also need to re-render the board to apply the specific tile/border colors 
-                // that are now tied to the body's theme class via CSS.
+                // that are now tied to the body's theme class via CSS selectors.
                 this.renderBoard(); 
                 
                 this.toggleSettings();
