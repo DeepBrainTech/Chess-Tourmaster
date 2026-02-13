@@ -54,7 +54,8 @@ export function requireAuth(handler: (request: NextRequest, payload: TokenPayloa
     if (!payload) {
       return jsonResponse(
         { success: false, message: 'Unauthorized', code: 'AUTH_REQUIRED' },
-        { status: 401 }
+        { status: 401 },
+        request.headers.get('Origin')
       );
     }
 

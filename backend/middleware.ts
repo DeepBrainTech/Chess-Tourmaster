@@ -10,9 +10,10 @@ export function middleware(request: NextRequest) {
   if (request.method !== 'OPTIONS') {
     return NextResponse.next();
   }
+  const origin = request.headers.get('Origin');
   return new NextResponse(null, {
     status: 204,
-    headers: getCorsHeaders(),
+    headers: getCorsHeaders(origin),
   });
 }
 

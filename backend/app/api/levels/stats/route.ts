@@ -8,12 +8,12 @@ import { jsonResponse, optionsResponse } from '@/lib/http';
  * GET /api/levels/stats?level=1
  */
 export const GET = requireAuth(async (request: NextRequest, payload) => {
+  const origin = request.headers.get('Origin');
   try {
     const { searchParams } = new URL(request.url);
     const level = searchParams.get('level');
 
     if (level) {
-      // 获取特定关卡的统计
       const levelNum = parseInt(level, 10);
       const records = await prisma.levelRecord.findMany({
         where: {
@@ -21,10 +21,9 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
           level: levelNum,
         },
         orderBy: { completed_at: 'desc' },
-        take: 10, // 最近10次记录
+        take: 10,
       });
 
-      // 找出最佳记录
       const bestRecord = await prisma.levelRecord.findFirst({
         where: {
           portal_user_id: payload.user_id,
@@ -42,7 +41,7 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
           best_time: bestRecord?.time_seconds || null,
           attempts: records.length,
         },
-      });
+      }, undefined, origin);
     } else {
       // 获取所有关卡的概览
       const allRecords = await prisma.levelRecord.findMany({
@@ -78,17 +77,18 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
           levels: Object.values(levelStats),
           total_attempts: allRecords.length,
         },
-      });
+      }, undefined, origin);
     }
   } catch (error) {
     console.error('Get level stats error:', error);
     return jsonResponse(
       { success: false, message: 'Failed to get level stats', code: 'SERVER_ERROR' },
-      { status: 500 }
+      { status: 500 },
+      origin
     );
   }
 });
 
-export function OPTIONS() {
-  return optionsResponse();
+export function OPTIONS(request: NextRequest) {
+  return optionsResponse(request.headers.get('Origin'));
 }

@@ -13,16 +13,13 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
       where: { portal_user_id: payload.user_id },
     });
 
+    const origin = request.headers.get('Origin');
     if (!progress) {
-      // 如果没有进度记录，返回初始值
       return jsonResponse({
         success: true,
         message: 'No progress found',
-        data: {
-          high_score: 0,
-          total_levels: 0,
-        },
-      });
+        data: { high_score: 0, total_levels: 0 },
+      }, undefined, origin);
     }
 
     return jsonResponse({
@@ -34,16 +31,17 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
         best_moves: progress.best_moves,
         total_moves: progress.total_moves,
       },
-    });
+    }, undefined, origin);
   } catch (error) {
     console.error('Load progress error:', error);
     return jsonResponse(
       { success: false, message: 'Failed to load progress', code: 'SERVER_ERROR' },
-      { status: 500 }
+      { status: 500 },
+      request.headers.get('Origin')
     );
   }
 });
 
-export function OPTIONS() {
-  return optionsResponse();
+export function OPTIONS(request: NextRequest) {
+  return optionsResponse(request.headers.get('Origin'));
 }

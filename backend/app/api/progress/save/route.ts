@@ -15,6 +15,7 @@ import { jsonResponse, optionsResponse } from '@/lib/http';
  * }
  */
 export const POST = requireAuth(async (request: NextRequest, payload) => {
+  const origin = request.headers.get('Origin');
   try {
     const body = await request.json();
     const { high_score, total_levels, best_moves, total_moves, level_data } = body;
@@ -22,7 +23,8 @@ export const POST = requireAuth(async (request: NextRequest, payload) => {
     if (typeof high_score !== 'number' || high_score < 0) {
       return jsonResponse(
         { success: false, message: 'Invalid high_score', code: 'INVALID_DATA' },
-        { status: 400 }
+        { status: 400 },
+        origin
       );
     }
 
@@ -83,16 +85,17 @@ export const POST = requireAuth(async (request: NextRequest, payload) => {
         best_moves: progress.best_moves,
         total_moves: progress.total_moves,
       },
-    });
+    }, undefined, origin);
   } catch (error) {
     console.error('Save progress error:', error);
     return jsonResponse(
       { success: false, message: 'Failed to save progress', code: 'SERVER_ERROR' },
-      { status: 500 }
+      { status: 500 },
+      origin
     );
   }
 });
 
-export function OPTIONS() {
-  return optionsResponse();
+export function OPTIONS(request: NextRequest) {
+  return optionsResponse(request.headers.get('Origin'));
 }
