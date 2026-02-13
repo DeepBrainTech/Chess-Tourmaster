@@ -10,7 +10,6 @@ type Props = {
   username?: string;
   tilesLeft: number;
   onSelectLevel: (level: number) => void;
-  onUndo: () => void;
   onRestart: () => void;
   onHint: () => void;
   hintCount: number;
@@ -33,7 +32,6 @@ export default function GameHeader({
   username,
   tilesLeft,
   onSelectLevel,
-  onUndo,
   onRestart,
   onHint,
   hintCount,
@@ -87,14 +85,6 @@ export default function GameHeader({
         </div>
       </div>
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onUndo}
-          className="bg-slate-700/80 hover:bg-slate-600 text-white p-2 rounded-lg shadow-lg border border-slate-500"
-          title="Undo"
-        >
-          <i className="fas fa-undo" />
-        </button>
         <button
           type="button"
           onClick={onRestart}

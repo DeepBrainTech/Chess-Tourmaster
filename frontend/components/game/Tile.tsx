@@ -6,6 +6,7 @@ type Props = {
   tile: TileData;
   isKnight: boolean;
   isValidMove: boolean;
+  isHintTarget: boolean;
   onClick: () => void;
 };
 
@@ -13,6 +14,7 @@ export default function Tile({
   tile,
   isKnight,
   isValidMove,
+  isHintTarget,
   onClick,
 }: Props) {
   const isVoid = tile.type === 'void';
@@ -33,6 +35,7 @@ export default function Tile({
 
   if (visited) classes += ' visited';
   if (isValidMove) classes += ' valid-move';
+  if (isHintTarget) classes += ' hint-target';
 
   if (isKnight) zIndex = 30;
 

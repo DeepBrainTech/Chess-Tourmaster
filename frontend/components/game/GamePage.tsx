@@ -64,6 +64,7 @@ export default function GamePage({ token, username }: Props) {
   const [leaderboardMode, setLeaderboardMode] = useState<LeaderboardMode>('classic');
   const [hintCount, setHintCount] = useState(1);
   const [hintLoading, setHintLoading] = useState(false);
+  const [hintTarget, setHintTarget] = useState<{ r: number; c: number } | null>(null);
   const [message, setMessage] = useState<{ text: string; className: string } | null>(null);
   const [shake, setShake] = useState(false);
   const fireStartRef = useRef<number>(0);
@@ -234,6 +235,7 @@ export default function GamePage({ token, username }: Props) {
 
   const handleMove = useCallback(
     (r: number, c: number) => {
+      setHintTarget(null);
       const tile = state.grid[r]?.[c];
       if (!tile || tile.type === 'void' || tile.visited) return;
       if (tile.type === 'king') {
@@ -291,6 +293,7 @@ export default function GamePage({ token, username }: Props) {
       stars,
       isFinalLevel: state.level >= MAX_LEVELS,
     });
+    setHintTarget(null);
     setModalType('win');
   }
 
@@ -308,6 +311,7 @@ export default function GamePage({ token, username }: Props) {
         dispatch({ type: 'SET_SAVED_CONFIG', payload: config });
       }
       dispatch({ type: 'START_LEVEL', payload: config });
+      setHintTarget(null);
       setModalType('none');
     },
     [state.savedGridConfig, state.gameMode]
@@ -328,11 +332,13 @@ export default function GamePage({ token, username }: Props) {
     if (!saved) return;
     dispatch({ type: 'PREPARE_RETRY' });
     dispatch({ type: 'START_LEVEL', payload: saved });
+    setHintTarget(null);
     setModalType('none');
   }, [state.savedGridConfig]);
 
   const setMode = useCallback((mode: 'classic' | 'math_tour') => {
     dispatch({ type: 'SET_MODE', payload: mode });
+    setHintTarget(null);
     loadProgress(mode);
     setModalType('welcome');
   }, [loadProgress]);
@@ -385,12 +391,9 @@ export default function GamePage({ token, username }: Props) {
 
       const hint = getHintMove(state);
       if (hint.type === 'next_move') {
-        setMessage({
-          text: `Hint: move to (${hint.move.r + 1}, ${hint.move.c + 1})`,
-          className: 'text-cyan-300',
-        });
-        setTimeout(() => setMessage(null), 2200);
+        setHintTarget(hint.move);
       } else {
+        setHintTarget(null);
         setMessage({
           text: "You can't win from here. Please restart.",
           className: 'text-rose-300',
@@ -398,6 +401,7 @@ export default function GamePage({ token, username }: Props) {
         setTimeout(() => setMessage(null), 2400);
       }
     } catch {
+      setHintTarget(null);
       setMessage({
         text: 'Hint service unavailable.',
         className: 'text-rose-300',
@@ -434,7 +438,6 @@ export default function GamePage({ token, username }: Props) {
             username={username}
             tilesLeft={state.tilesLeft}
             onSelectLevel={handleSelectLevel}
-            onUndo={() => dispatch({ type: 'UNDO' })}
             onRestart={restartLevel}
             onHint={handleHint}
             hintCount={hintCount}
@@ -446,7 +449,7 @@ export default function GamePage({ token, username }: Props) {
             tilesLeft={state.tilesLeft}
             gameTimeSeconds={state.gameTimeSeconds}
           />
-          <Board state={state} onMove={handleMove} shake={shake} />
+          <Board state={state} onMove={handleMove} shake={shake} hintTarget={hintTarget} />
           {message && (
             <div
               className={`absolute inset-0 flex items-center justify-center pointer-events-none z-50 transition-opacity duration-300 ${message.className}`}

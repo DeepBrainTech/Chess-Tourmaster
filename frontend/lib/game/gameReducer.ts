@@ -7,7 +7,6 @@ export type GameAction =
   | { type: 'START_LEVEL'; payload: LevelConfig }
   | { type: 'SET_SAVED_CONFIG'; payload: LevelConfig | null }
   | { type: 'MOVE'; payload: { r: number; c: number } }
-  | { type: 'UNDO' }
   | { type: 'SET_GAME_TIME'; payload: number }
   | { type: 'SET_THEME'; payload: ThemeName }
   | { type: 'LOAD_HIGH_SCORE'; payload: number }
@@ -128,25 +127,6 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         tilesLeft: state.tilesLeft - 1,
         currentScore: state.currentScore + finalScore,
         scoreMultiplier: multiplierAfterMove,
-      };
-    }
-
-    case 'UNDO': {
-      if (!state.isPlaying || state.history.length === 0) return state;
-      const last = state.history[state.history.length - 1];
-      const newGrid = deepCopyGrid(state.grid);
-      const tile = newGrid[last.prevPos.r][last.prevPos.c];
-      tile.visited = false;
-      if (state.gameMode === 'math_tour') tile.value = last.valueRestored;
-
-      return {
-        ...state,
-        grid: newGrid,
-        knightPos: last.knightPos,
-        history: state.history.slice(0, -1),
-        tilesLeft: state.tilesLeft + 1,
-        currentScore: state.currentScore - last.scoreCollected,
-        scoreMultiplier: last.multiplierUsed,
       };
     }
 

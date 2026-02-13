@@ -8,9 +8,10 @@ type Props = {
   state: GameState;
   onMove: (r: number, c: number) => void;
   shake: boolean;
+  hintTarget: { r: number; c: number } | null;
 };
 
-export default function Board({ state, onMove, shake }: Props) {
+export default function Board({ state, onMove, shake, hintTarget }: Props) {
   const size = state.gridSizeVal;
 
   if (!state.grid.length) {
@@ -34,12 +35,17 @@ export default function Board({ state, onMove, shake }: Props) {
           const valid =
             state.isPlaying &&
             isValidMove(state, r, c);
+          const isHintTarget =
+            hintTarget != null &&
+            hintTarget.r === r &&
+            hintTarget.c === c;
           return (
             <Tile
               key={`${r}-${c}`}
               tile={tile}
               isKnight={isKnight}
               isValidMove={valid}
+              isHintTarget={isHintTarget}
               onClick={() => onMove(r, c)}
             />
           );
