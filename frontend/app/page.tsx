@@ -49,6 +49,10 @@ export default function Home() {
       const payload = decodeJwt(t);
       if (payload?.username) setUsername(payload.username);
     }
+    // 读完 token 后从 URL 移除 hash，避免留在地址栏与历史记录中
+    if (typeof window !== 'undefined' && window.location.hash) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
   }, [mounted]);
 
   if (!mounted) {
