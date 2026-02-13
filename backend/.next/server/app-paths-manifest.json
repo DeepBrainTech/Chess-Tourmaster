@@ -1,6 +1,6 @@
 {
-  "/api/leaderboard/route": "app/api/leaderboard/route.js",
   "/_not-found/page": "app/_not-found/page.js",
+  "/api/leaderboard/route": "app/api/leaderboard/route.js",
   "/api/progress/load/route": "app/api/progress/load/route.js",
   "/api/progress/save/route": "app/api/progress/save/route.js",
   "/api/levels/stats/route": "app/api/levels/stats/route.js",
