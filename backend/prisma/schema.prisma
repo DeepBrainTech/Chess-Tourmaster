@@ -40,3 +40,16 @@ model LevelRecord {
   @@index([portal_user_id, game_mode, level])
   @@map("level_records")
 }
+
+// Persistent hint inventory by user.
+model UserHint {
+  id             Int      @id @default(autoincrement())
+  portal_user_id Int      @unique
+  username       String
+  hint_count     Int      @default(1)
+  updated_at     DateTime @updatedAt
+  created_at     DateTime @default(now())
+
+  @@index([portal_user_id])
+  @@map("user_hints")
+}

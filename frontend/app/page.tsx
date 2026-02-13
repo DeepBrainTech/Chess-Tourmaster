@@ -34,6 +34,7 @@ function decodeJwt(token: string): { user_id?: number; username?: string } | nul
 export default function Home() {
   const [token, setToken] = useState<string | null>(null);
   const [username, setUsername] = useState<string>('Guest');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -47,7 +48,14 @@ export default function Home() {
     setToken(t);
     if (t) {
       const payload = decodeJwt(t);
-      if (payload?.username) setUsername(payload.username);
+      if (payload?.user_id && payload?.username) {
+        setUsername(payload.username);
+        setIsAuthenticated(true);
+      } else {
+        setIsAuthenticated(false);
+      }
+    } else {
+      setIsAuthenticated(false);
     }
     // 读完 token 后从 URL 移除 hash，避免留在地址栏与历史记录中
     if (typeof window !== 'undefined' && window.location.hash) {
@@ -61,6 +69,23 @@ export default function Home() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-cyan-500 mx-auto mb-4" />
           <p>Loading Chess Tourmaster...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !token) {
+    return (
+      <div className="flex items-center justify-center min-h-[100dvh] bg-slate-950 text-white px-6">
+        <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900/80 p-8 text-center shadow-2xl">
+          <h1 className="text-2xl font-bold mb-3">Login Required</h1>
+          <p className="text-slate-300 mb-6">Please login to start playing Chess Tourmaster.</p>
+          <a
+            href="https://game.deepbraintechnology.com"
+            className="inline-flex items-center justify-center w-full rounded-xl bg-cyan-600 hover:bg-cyan-500 px-4 py-3 font-semibold transition"
+          >
+            Login
+          </a>
         </div>
       </div>
     );

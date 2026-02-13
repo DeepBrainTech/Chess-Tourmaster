@@ -1,7 +1,8 @@
-﻿import { NextRequest } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { jsonResponse, optionsResponse } from '@/lib/http';
+import { addHintCount, ensureUserHint } from '@/lib/userHint';
 
 /**
  * Save mode progress and per-level record.
@@ -19,6 +20,8 @@ export const POST = requireAuth(async (request: NextRequest, payload) => {
 
     let modeUnlockedLevel =
       typeof total_levels === 'number' ? Math.max(1, Math.min(100, Math.floor(total_levels))) : 1;
+
+    let hintCount = (await ensureUserHint(payload.user_id, payload.username)).hint_count;
 
     if (level_data && typeof level_data === 'object') {
       const mode = level_data.game_mode === 'math_tour' ? 'math_tour' : 'classic';
@@ -67,6 +70,9 @@ export const POST = requireAuth(async (request: NextRequest, payload) => {
           max_unlocked_level: modeUnlockedLevel,
         },
       });
+
+      const updatedHint = await addHintCount(payload.user_id, payload.username, 1);
+      hintCount = updatedHint.hint_count;
     }
 
     return jsonResponse(
@@ -78,6 +84,7 @@ export const POST = requireAuth(async (request: NextRequest, payload) => {
           total_levels: modeUnlockedLevel,
           best_moves: null,
           total_moves: 0,
+          hint_count: hintCount,
         },
       },
       undefined,

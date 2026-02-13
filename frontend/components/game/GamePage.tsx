@@ -22,6 +22,7 @@ import GameHeader, { TilesAndScoreBar } from './GameHeader';
 import Board from './Board';
 import MainModal from './MainModal';
 import { getApiBase } from '@/lib/apiBase';
+import { getHintMove } from '@/lib/game/hint';
 
 type WinData = {
   level: number;
@@ -61,6 +62,8 @@ export default function GamePage({ token, username }: Props) {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardMode, setLeaderboardMode] = useState<LeaderboardMode>('classic');
+  const [hintCount, setHintCount] = useState(1);
+  const [hintLoading, setHintLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; className: string } | null>(null);
   const [shake, setShake] = useState(false);
   const fireStartRef = useRef<number>(0);
@@ -87,6 +90,9 @@ export default function GamePage({ token, username }: Props) {
           type: 'SET_MAX_UNLOCKED_LEVEL',
           payload: normalizeUnlockedLevel(progressData.data.total_levels),
         });
+      }
+      if (progressData.success && typeof progressData.data?.hint_count === 'number') {
+        setHintCount(Math.max(0, Math.floor(progressData.data.hint_count)));
       }
 
       const statsData = await statsRes.json();
@@ -131,6 +137,11 @@ export default function GamePage({ token, username }: Props) {
             total_levels: maxUnlockedLevel,
             level_data: levelData,
           }),
+        }).then(async (res) => {
+          const data = await res.json().catch(() => null);
+          if (data?.success && typeof data.data?.hint_count === 'number') {
+            setHintCount(Math.max(0, Math.floor(data.data.hint_count)));
+          }
         });
       } catch (e) {
         console.error(e);
@@ -336,11 +347,72 @@ export default function GamePage({ token, username }: Props) {
     [state.level, state.maxUnlockedLevel, startLevel]
   );
 
+  const handleHint = useCallback(async () => {
+    if (!token || !state.isPlaying || hintLoading) return;
+    if (hintCount <= 0) {
+      setMessage({
+        text: 'No hints left.',
+        className: 'text-amber-300',
+      });
+      setTimeout(() => setMessage(null), 1800);
+      return;
+    }
+
+    setHintLoading(true);
+    try {
+      const consumeRes = await fetch(`${getApiBase()}/api/hint/use`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const consumeData = await consumeRes.json();
+      if (!consumeData?.success) {
+        if (typeof consumeData?.data?.hint_count === 'number') {
+          setHintCount(Math.max(0, Math.floor(consumeData.data.hint_count)));
+        }
+        setMessage({
+          text: 'No hints left.',
+          className: 'text-amber-300',
+        });
+        setTimeout(() => setMessage(null), 1800);
+        return;
+      }
+
+      if (typeof consumeData?.data?.hint_count === 'number') {
+        setHintCount(Math.max(0, Math.floor(consumeData.data.hint_count)));
+      } else {
+        setHintCount(prev => Math.max(0, prev - 1));
+      }
+
+      const hint = getHintMove(state);
+      if (hint.type === 'next_move') {
+        setMessage({
+          text: `Hint: move to (${hint.move.r + 1}, ${hint.move.c + 1})`,
+          className: 'text-cyan-300',
+        });
+        setTimeout(() => setMessage(null), 2200);
+      } else {
+        setMessage({
+          text: "You can't win from here. Please restart.",
+          className: 'text-rose-300',
+        });
+        setTimeout(() => setMessage(null), 2400);
+      }
+    } catch {
+      setMessage({
+        text: 'Hint service unavailable.',
+        className: 'text-rose-300',
+      });
+      setTimeout(() => setMessage(null), 2000);
+    } finally {
+      setHintLoading(false);
+    }
+  }, [hintCount, hintLoading, state, token]);
+
   const isHomeView = modalType === 'mode';
 
   return (
     <div
-      className={`h-screen w-screen flex flex-col items-center justify-center relative overflow-hidden ${state.theme}`}
+      className={`game-root min-h-[100dvh] w-screen flex flex-col items-center justify-start md:justify-center relative overflow-hidden ${state.theme}`}
     >
       <PortalButton
         isHomeView={isHomeView}
@@ -364,6 +436,9 @@ export default function GamePage({ token, username }: Props) {
             onSelectLevel={handleSelectLevel}
             onUndo={() => dispatch({ type: 'UNDO' })}
             onRestart={restartLevel}
+            onHint={handleHint}
+            hintCount={hintCount}
+            hintLoading={hintLoading}
             onSettings={() => setModalType('settings')}
             onHelp={() => setModalType('help')}
           />

@@ -12,6 +12,9 @@ type Props = {
   onSelectLevel: (level: number) => void;
   onUndo: () => void;
   onRestart: () => void;
+  onHint: () => void;
+  hintCount: number;
+  hintLoading: boolean;
   onSettings: () => void;
   onHelp: () => void;
 };
@@ -32,6 +35,9 @@ export default function GameHeader({
   onSelectLevel,
   onUndo,
   onRestart,
+  onHint,
+  hintCount,
+  hintLoading,
   onSettings,
   onHelp,
 }: Props) {
@@ -96,6 +102,16 @@ export default function GameHeader({
           title="Restart"
         >
           <i className="fas fa-redo" />
+        </button>
+        <button
+          type="button"
+          onClick={onHint}
+          disabled={hintLoading || hintCount <= 0}
+          className="bg-amber-700/80 hover:bg-amber-600 text-white px-2 py-2 rounded-lg shadow-lg border border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          title={`Hint (${hintCount})`}
+        >
+          <i className="fas fa-lightbulb mr-1" />
+          {hintLoading ? '...' : hintCount}
         </button>
         <button
           type="button"

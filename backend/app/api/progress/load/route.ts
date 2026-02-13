@@ -1,7 +1,8 @@
-﻿import { NextRequest } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { jsonResponse, optionsResponse } from '@/lib/http';
+import { ensureUserHint } from '@/lib/userHint';
 
 /**
  * Load mode progress.
@@ -14,6 +15,7 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
     const origin = request.headers.get('Origin');
 
     const hasModeFilter = gameMode === 'classic' || gameMode === 'math_tour';
+    const userHint = await ensureUserHint(payload.user_id, payload.username);
 
     if (hasModeFilter) {
       const modeProgress = await prisma.modeProgress.findUnique({
@@ -50,6 +52,7 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
             total_levels: modeUnlockedLevel,
             best_moves: null,
             total_moves: 0,
+            hint_count: userHint.hint_count,
           },
         },
         undefined,
@@ -71,6 +74,7 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
           total_levels: Math.max(1, maxUnlocked._max.max_unlocked_level ?? 1),
           best_moves: null,
           total_moves: 0,
+          hint_count: userHint.hint_count,
         },
       },
       undefined,

@@ -4,7 +4,7 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'Chess Tourmaster',
   description: 'A challenging chess knight tour puzzle game',
-  icons: { icon: '/favicon.ico' },
+  icons: { icon: '/icon.png' },
 }
 
 export default function RootLayout({
