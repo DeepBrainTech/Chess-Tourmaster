@@ -1,16 +1,14 @@
-// 前端生产: chess-tourmaster.deepbraintechnology.com；后端部署在 Railway（公网域名由 Railway 提供）
-// 多源逗号分隔；未配置时允许所有源，避免线上因环境变量遗漏导致 CORS 直接失效
-const corsAllowedOrigins = (process.env.CORS_ORIGIN || '*')
-  .split(',')
-  .map((o) => o.trim())
-  .filter(Boolean);
+// 固定允许的前端来源（不依赖环境变量）
+const corsAllowedOrigins = [
+  'https://chess-tourmaster.pages.dev',
+  'https://chess-tourmaster.deepbraintechnology.com',
+];
 
 function resolveAllowOrigin(requestOrigin: string | null): string {
-  if (corsAllowedOrigins.includes('*')) return '*';
   if (requestOrigin && corsAllowedOrigins.includes(requestOrigin)) return requestOrigin;
   if (requestOrigin && corsAllowedOrigins.length === 0) return requestOrigin;
   if (corsAllowedOrigins.length > 0) return corsAllowedOrigins[0];
-  return '*';
+  return '';
 }
 
 export function getCorsHeaders(requestOrigin?: string | null): HeadersInit {
