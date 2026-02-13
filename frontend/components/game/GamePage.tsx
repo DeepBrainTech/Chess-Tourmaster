@@ -236,7 +236,7 @@ export default function GamePage({ token, username }: Props) {
           setTimeout(() => setShake(false), 500);
           return;
         }
-        handleWin();
+        void handleWin();
         return;
       }
       const dr = Math.abs(state.knightPos.r - r);
@@ -252,14 +252,14 @@ export default function GamePage({ token, username }: Props) {
     [state]
   );
 
-  function handleWin() {
+  async function handleWin() {
     playVictory();
     const elapsed = (Date.now() - state.gameStartTime) / 1000;
     let stars = 1;
     if (elapsed <= state.parTime) stars = 3;
     else if (elapsed <= state.parTime * 1.5) stars = 2;
     const nextUnlockedLevel = Math.min(MAX_LEVELS, Math.max(state.maxUnlockedLevel, state.level + 1));
-    saveProgress(state.highScore, nextUnlockedLevel, {
+    await saveProgress(state.highScore, nextUnlockedLevel, {
       level: state.level,
       moves_count: state.history.length,
       time_seconds: state.gameTimeSeconds,
@@ -322,8 +322,9 @@ export default function GamePage({ token, username }: Props) {
 
   const setMode = useCallback((mode: 'classic' | 'math_tour') => {
     dispatch({ type: 'SET_MODE', payload: mode });
+    loadProgress(mode);
     setModalType('welcome');
-  }, []);
+  }, [loadProgress]);
 
   const handleSelectLevel = useCallback(
     (selectedLevel: number) => {

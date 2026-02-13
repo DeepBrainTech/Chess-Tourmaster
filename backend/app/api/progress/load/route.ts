@@ -20,15 +20,30 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
     let modeUnlockedLevel = 1;
 
     if (hasModeFilter) {
-      const modeMax = await prisma.levelRecord.aggregate({
+      const modeProgress = await prisma.modeProgress.findUnique({
         where: {
-          portal_user_id: payload.user_id,
-          game_mode: gameMode,
+          portal_user_id_game_mode: {
+            portal_user_id: payload.user_id,
+            game_mode: gameMode,
+          },
         },
-        _max: { level: true },
+        select: { max_unlocked_level: true },
       });
-      const maxCompleted = modeMax._max.level ?? 0;
-      modeUnlockedLevel = Math.max(1, Math.min(100, maxCompleted + 1));
+
+      if (modeProgress?.max_unlocked_level != null) {
+        modeUnlockedLevel = Math.max(1, Math.min(100, Math.floor(modeProgress.max_unlocked_level)));
+      } else {
+        // Backward-compatible fallback for old data before mode_progress table.
+        const modeMax = await prisma.levelRecord.aggregate({
+          where: {
+            portal_user_id: payload.user_id,
+            game_mode: gameMode,
+          },
+          _max: { level: true },
+        });
+        const maxCompleted = modeMax._max.level ?? 0;
+        modeUnlockedLevel = Math.max(1, Math.min(100, maxCompleted + 1));
+      }
     }
 
     if (!progress) {

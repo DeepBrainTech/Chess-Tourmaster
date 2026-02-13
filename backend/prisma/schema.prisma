@@ -24,9 +24,27 @@ model GameProgress {
 
   // 关联关卡记录
   level_records   LevelRecord[]
+  mode_progresses ModeProgress[]
 
   @@index([portal_user_id])
   @@map("game_progress")
+}
+
+// 按模式记录解锁进度
+model ModeProgress {
+  id                 Int          @id @default(autoincrement())
+  portal_user_id     Int
+  game_mode          String
+  max_unlocked_level Int          @default(1)
+  updated_at         DateTime     @updatedAt
+  created_at         DateTime     @default(now())
+
+  progress           GameProgress @relation(fields: [portal_user_id], references: [portal_user_id], onDelete: Cascade)
+
+  @@unique([portal_user_id, game_mode])
+  @@index([portal_user_id])
+  @@index([game_mode])
+  @@map("mode_progress")
 }
 
 // 关卡记录表 - 记录每个关卡的详细数据
