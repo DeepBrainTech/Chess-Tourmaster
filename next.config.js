@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  output: 'export', // 静态导出（Cloudflare Pages）
+  output: 'standalone', // 静态导出（Cloudflare Pages）
 }
 
 module.exports = nextConfig
