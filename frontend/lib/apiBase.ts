@@ -3,5 +3,7 @@
  */
 export function getApiBase(): string {
   if (typeof window === 'undefined') return '';
-  return process.env.NEXT_PUBLIC_API_URL ?? '';
+  const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
+  const fallback = 'https://chess-tourmaster-production.up.railway.app';
+  return (configured && configured.length > 0 ? configured : fallback).replace(/\/+$/, '');
 }
