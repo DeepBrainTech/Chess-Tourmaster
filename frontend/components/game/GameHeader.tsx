@@ -42,12 +42,12 @@ export default function GameHeader({
   const isMathTour = gameMode === 'math_tour';
 
   return (
-    <div className="z-10 w-full max-w-2xl px-4 mb-2 flex justify-between items-center">
-      <div>
-        <h1 className="text-xl md:text-3xl text-rose-500 font-bold fantasy-font tracking-wider drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
+    <div className="z-10 w-full max-w-[95vw] lg:max-w-5xl xl:max-w-6xl px-4 lg:px-6 xl:px-8 mb-3 flex justify-between items-start">
+      <div className="min-w-0 flex-1">
+        <h1 className="text-xl md:text-3xl lg:text-4xl text-rose-500 font-bold fantasy-font tracking-wider drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
           <i className="fas fa-chess-board mr-2" /> Tourmaster
         </h1>
-        <div className="flex items-center gap-3 text-sm md:text-base text-gray-300 mt-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 lg:gap-x-4 xl:gap-x-6 text-sm md:text-base lg:text-lg text-gray-300 mt-1">
           <span className="font-bold text-white">
             {isMathTour ? 'Math Tour' : 'Classic Tour'}
           </span>
@@ -57,7 +57,7 @@ export default function GameHeader({
             <select
               value={level}
               onChange={(e) => onSelectLevel(Number(e.target.value))}
-              className="bg-slate-800 border border-slate-600 rounded px-2 py-0.5 text-white text-xs md:text-sm"
+              className="bg-slate-800 border border-slate-600 rounded px-2 py-0.5 text-white text-xs md:text-sm xl:min-w-[170px]"
             >
               {Array.from({ length: MAX_LEVELS }, (_, index) => {
                 const optionLevel = index + 1;
@@ -84,11 +84,11 @@ export default function GameHeader({
           )}
         </div>
       </div>
-      <div className="flex gap-2">
+      <div className="flex gap-2 lg:gap-3 xl:gap-4 pl-3 xl:pl-6">
         <button
           type="button"
           onClick={onRestart}
-          className="bg-slate-700/80 hover:bg-slate-600 text-white p-2 rounded-lg shadow-lg border border-slate-500"
+          className="bg-slate-700/80 hover:bg-slate-600 text-white p-2 lg:p-3 rounded-lg shadow-lg border border-slate-500"
           title="Restart"
         >
           <i className="fas fa-redo" />
@@ -97,7 +97,7 @@ export default function GameHeader({
           type="button"
           onClick={onHint}
           disabled={hintLoading || hintCount <= 0}
-          className="bg-amber-700/80 hover:bg-amber-600 text-white px-2 py-2 rounded-lg shadow-lg border border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-amber-700/80 hover:bg-amber-600 text-white px-2 lg:px-3 py-2 lg:py-3 rounded-lg shadow-lg border border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
           title={`Hint (${hintCount})`}
         >
           <i className="fas fa-lightbulb mr-1" />
@@ -106,7 +106,7 @@ export default function GameHeader({
         <button
           type="button"
           onClick={onSettings}
-          className="bg-indigo-700/80 hover:bg-indigo-600 text-white p-2 rounded-lg shadow-lg border border-indigo-500"
+          className="bg-indigo-700/80 hover:bg-indigo-600 text-white p-2 lg:p-3 rounded-lg shadow-lg border border-indigo-500"
           title="Settings"
         >
           <i className="fas fa-cog" />
@@ -114,7 +114,7 @@ export default function GameHeader({
         <button
           type="button"
           onClick={onHelp}
-          className="bg-rose-700/80 hover:bg-rose-600 text-white p-2 rounded-lg shadow-lg border border-rose-500"
+          className="bg-rose-700/80 hover:bg-rose-600 text-white p-2 lg:p-3 rounded-lg shadow-lg border border-rose-500"
           title="Help"
         >
           <i className="fas fa-question" />
@@ -132,8 +132,8 @@ export function TilesAndScoreBar({
   gameTimeSeconds: number;
 }) {
   return (
-    <div className="z-10 w-full max-w-2xl px-4 mb-2 flex flex-wrap justify-between items-center h-8">
-      <div className="text-cyan-300 font-bold text-sm md:text-lg flex items-center gap-3 bg-slate-900/50 px-3 py-1 rounded-full border border-slate-700">
+    <div className="z-10 w-full max-w-[95vw] lg:max-w-5xl px-4 lg:px-6 mb-3 flex flex-wrap justify-between items-center min-h-8">
+      <div className="text-cyan-300 font-bold text-sm md:text-lg lg:text-xl flex items-center gap-3 bg-slate-900/50 px-3 lg:px-4 py-1 lg:py-1.5 rounded-full border border-slate-700">
         <span>
           Tiles Left: <span className="ml-2 text-white">{tilesLeft}</span>
         </span>

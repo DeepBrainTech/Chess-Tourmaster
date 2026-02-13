@@ -167,6 +167,14 @@ h2,
   }
 }
 
+/* Desktop: reduce cramped feeling by expanding board target size */
+@media (min-width: 1201px) {
+  .board-shell {
+    width: min(78vw, calc(100dvh - 210px));
+    max-width: 980px;
+  }
+}
+
 /* Overlay modal usability on tablets */
 @media (max-height: 900px) {
   .modal-backdrop {

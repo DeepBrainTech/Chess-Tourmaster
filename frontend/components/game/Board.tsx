@@ -25,7 +25,7 @@ export default function Board({ state, onMove, shake, hintTarget }: Props) {
   return (
     <div
       id="game-board"
-      className={`board-shell z-10 relative bg-slate-800/60 p-2 md:p-3 rounded-xl shadow-2xl border-4 border-slate-600 backdrop-blur-md w-full max-w-[95vw] md:max-w-2xl aspect-square flex items-center justify-center mx-auto grid gap-1 ${shake ? 'shake' : ''}`}
+      className={`board-shell z-10 relative bg-slate-800/60 p-2 md:p-3 lg:p-4 rounded-xl shadow-2xl border-4 border-slate-600 backdrop-blur-md w-full max-w-[95vw] md:max-w-3xl lg:max-w-4xl aspect-square flex items-center justify-center mx-auto grid gap-1 md:gap-1.5 lg:gap-2 ${shake ? 'shake' : ''}`}
       style={{ gridTemplateColumns: `repeat(${size}, 1fr)` }}
     >
       {state.grid.flatMap((row, r) =>
