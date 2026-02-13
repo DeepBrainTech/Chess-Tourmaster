@@ -263,23 +263,19 @@ export default function GamePage({ token, username }: Props) {
         <div className="theme-blob w-96 h-96 bg-purple-500 bottom-0 right-0 animation-delay-2000" />
       </div>
 
-      <div className="absolute top-4 left-20 z-10 text-gray-300 text-sm">
-        Player: {username}
-      </div>
-
       {modalType === 'none' && (
         <>
           <GameHeader
             gameMode={state.gameMode}
             level={state.level}
-            gameTimeSeconds={state.gameTimeSeconds}
+            username={username}
             tilesLeft={state.tilesLeft}
             currentScore={state.currentScore}
             requiredScore={state.requiredScore}
             onUndo={() => dispatch({ type: 'UNDO' })}
             onRestart={restartLevel}
-            onSettings={() => {}}
-            onHelp={() => {}}
+            onSettings={() => setModalType('settings')}
+            onHelp={() => setModalType('help')}
           />
           <TilesAndScoreBar
             gameMode={state.gameMode}
@@ -320,6 +316,8 @@ export default function GamePage({ token, username }: Props) {
         onStartLevel={() => startLevel(1, false)}
         onNextLevel={nextLevel}
         onRetry={restartLevel}
+        onCloseOverlay={() => setModalType('none')}
+        onSetTheme={(name) => dispatch({ type: 'SET_THEME', payload: name })}
       />
     </div>
   );

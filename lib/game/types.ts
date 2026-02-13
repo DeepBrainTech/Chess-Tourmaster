@@ -53,7 +53,7 @@ export interface GameState {
   theme: string;
 }
 
-export type ModalType = 'none' | 'mode' | 'welcome' | 'win' | 'lose';
+export type ModalType = 'none' | 'mode' | 'welcome' | 'win' | 'lose' | 'settings' | 'help';
 export type ThemeName = 'cosmic' | 'royal' | 'nature' | 'inferno' | 'desert' | 'frost' | 'volcanic';
 
 export const THEME_CLASSES: Record<ThemeName, string> = {

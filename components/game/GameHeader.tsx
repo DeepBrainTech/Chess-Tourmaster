@@ -3,7 +3,7 @@
 type Props = {
   gameMode: 'classic' | 'math_tour';
   level: number;
-  gameTimeSeconds: number;
+  username?: string;
   tilesLeft: number;
   currentScore: number;
   requiredScore: number;
@@ -22,7 +22,7 @@ function formatTime(seconds: number): string {
 export default function GameHeader({
   gameMode,
   level,
-  gameTimeSeconds,
+  username,
   tilesLeft,
   currentScore,
   requiredScore,
@@ -48,11 +48,15 @@ export default function GameHeader({
           <span>
             Lvl <span className="font-bold text-white">{level}</span>
           </span>
-          <span className="text-gray-500">|</span>
-          <span className="font-mono text-cyan-300">
-            <i className="far fa-clock mr-1" />
-            {formatTime(gameTimeSeconds)}
-          </span>
+          {username != null && username !== '' && (
+            <>
+              <span className="text-gray-500">|</span>
+              <span className="text-cyan-300">
+                <i className="fas fa-user mr-1" />
+                {username}
+              </span>
+            </>
+          )}
         </div>
       </div>
       <div className="flex gap-2">
