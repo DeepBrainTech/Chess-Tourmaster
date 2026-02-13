@@ -3,6 +3,10 @@
  * 处理所有与后端的交互
  */
 
+import { getApiBase } from './apiBase';
+
+const apiBase = () => getApiBase();
+
 export interface GameProgress {
   high_score: number;
   total_levels?: number;
@@ -29,7 +33,7 @@ export class GameAPI {
    */
   async saveProgress(highScore: number, totalLevels?: number): Promise<boolean> {
     try {
-      const response = await fetch('/api/progress/save', {
+      const response = await fetch(`${apiBase()}/api/progress/save`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -60,7 +64,7 @@ export class GameAPI {
    */
   async loadProgress(): Promise<GameProgress | null> {
     try {
-      const response = await fetch('/api/progress/load', {
+      const response = await fetch(`${apiBase()}/api/progress/load`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.token}`,
@@ -93,7 +97,7 @@ export class GameAPI {
    */
   static async getLeaderboard(limit: number = 10): Promise<LeaderboardEntry[]> {
     try {
-      const response = await fetch(`/api/leaderboard?limit=${limit}`);
+      const response = await fetch(`${apiBase()}/api/leaderboard?limit=${limit}`);
       const data = await response.json();
       
       if (!response.ok || !data.success) {

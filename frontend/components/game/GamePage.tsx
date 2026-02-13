@@ -22,8 +22,7 @@ import PortalButton from './PortalButton';
 import GameHeader, { TilesAndScoreBar } from './GameHeader';
 import Board from './Board';
 import MainModal from './MainModal';
-
-const API_BASE = typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_API_URL || '') : '';
+import { getApiBase } from '@/lib/apiBase';
 
 type WinData = {
   level: number;
@@ -57,7 +56,7 @@ export default function GamePage({ token, username }: Props) {
   const loadProgress = useCallback(async () => {
     if (!token) return null;
     try {
-      const res = await fetch(`${API_BASE}/api/progress/load`, {
+      const res = await fetch(`${getApiBase()}/api/progress/load`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -74,7 +73,7 @@ export default function GamePage({ token, username }: Props) {
     async (highScore: number) => {
       if (!token) return;
       try {
-        await fetch(`${API_BASE}/api/progress/save`, {
+        await fetch(`${getApiBase()}/api/progress/save`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
