@@ -49,7 +49,6 @@ prisma/migrations/
 
 # Backups
 *.bak
-index.html.bak
 
 # Docker
 Dockerfile

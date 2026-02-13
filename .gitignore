@@ -37,9 +37,6 @@ next-env.d.ts
 # Prisma
 /prisma/migrations/
 
-# Old HTML file (backup)
-index.html.bak
-
 .vscode/
 .cursor/
 *.log

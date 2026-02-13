@@ -60,64 +60,29 @@
 
         console.log("User ID:", USER_ID);
         console.log("Username:", USERNAME);
-        // 替换为 API 调用
-        async function saveProgress(progressObj) {
-            if (!USER_ID || !jwtToken) {
-                console.warn("No user ID or token, cannot save progress");
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/progress/save', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${jwtToken}`,
-                    },
-                    body: JSON.stringify({
-                        high_score: progressObj.highScore,
-                        total_levels: progressObj.totalLevels || 0,
-                    }),
-                });
-
-                const data = await response.json();
-                if (data.success) {
-                    console.log("Progress saved to server:", data.data);
-                } else {
-                    console.error("Failed to save progress:", data.message);
-                }
-            } catch (error) {
-                console.error("Error saving progress:", error);
-            }
+        function saveProgress(progressObj) {
+            if (!USER_ID) return;
+            const key = `tourmaster_progress_${USER_ID}`;
+            // Save the high score, which represents the highest cumulative *base* score achieved
+            localStorage.setItem(key, JSON.stringify({ highScore: progressObj.highScore }));
+            console.log("Progress saved:", progressObj);
         }
 
-        async function loadProgress() {
-            if (!USER_ID || !jwtToken) {
-                console.warn("No user ID or token, cannot load progress");
-                return null;
-            }
+        function loadProgress() {
+            if (!USER_ID) return null;
+            const key = `tourmaster_progress_${USER_ID}`;
+            const raw = localStorage.getItem(key);
+            if (!raw) return null;
 
             try {
-                const response = await fetch('/api/progress/load', {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${jwtToken}`,
-                    },
-                });
-
-                const data = await response.json();
-                if (data.success) {
-                    console.log("Progress loaded from server:", data.data);
-                    return {
-                        highScore: data.data.high_score || 0,
-                        totalLevels: data.data.total_levels || 0,
-                    };
-                } else {
-                    console.error("Failed to load progress:", data.message);
-                    return null;
-                }
-            } catch (error) {
-                console.error("Error loading progress:", error);
+                const data = JSON.parse(raw);
+                console.log("Loaded progress:", data);
+                // Load high score
+                return {
+                    highScore: data.highScore || 0,
+                };
+            } catch (e) {
+                console.error("Error loading saved progress:", e);
                 return null;
             }
         }
@@ -391,11 +356,8 @@
 </head>
 <body id="main-body" class="h-screen w-screen flex flex-col items-center justify-center relative overflow-hidden bg-theme-cosmic">
 
-    <div id="portal-btn-wrap" class="fixed top-4 left-4 z-[100]">
-        <a id="portal-btn" href="https://game.deepbraintechnology.com" target="_blank" rel="noopener noreferrer" class="inline-block px-6 py-2.5 bg-white hover:bg-gray-100 text-gray-800 font-bold rounded-full shadow-md transition cursor-pointer">
-            Back to Main Portal
-        </a>
-    </div>
+    <div id="player-info" style="position:absolute; top:10px; left:10px; color:white; font-size:18px;"></div>
+
     <div id="bg-blobs" class="absolute inset-0 z-0 pointer-events-none overflow-hidden">
         <div class="theme-blob w-96 h-96 bg-cyan-500 top-0 left-0"></div>
         <div class="theme-blob w-96 h-96 bg-purple-500 bottom-0 right-0 animation-delay-2000"></div>
@@ -411,7 +373,7 @@
                 <span class="text-gray-500">|</span>
                 <span>Lvl <span id="level-display" class="font-bold text-white">1</span></span>
                 <span class="text-gray-500">|</span>
-                <span id="player-info" class="text-gray-300"></span>
+                <span class="font-mono text-cyan-300"><i class="far fa-clock mr-1"></i><span id="game-timer">00:00</span></span>
             </div>
         </div>
         <div class="flex gap-2">
@@ -434,10 +396,8 @@
     </div>
 
     <div class="z-10 w-full max-w-2xl px-4 mb-2 flex flex-wrap justify-between items-center h-8">
-        <div class="text-cyan-300 font-bold text-sm md:text-lg flex items-center gap-3 bg-slate-900/50 px-3 py-1 rounded-full border border-slate-700">
-            <span>Tiles Left: <span id="tiles-left" class="ml-2 text-white">0</span></span>
-            <span class="text-slate-500">|</span>
-            <span class="font-mono"><i class="far fa-clock mr-1"></i><span id="game-timer">00:00</span></span>
+        <div class="text-cyan-300 font-bold text-sm md:text-lg flex items-center bg-slate-900/50 px-3 py-1 rounded-full border border-slate-700">
+            Tiles Left: <span id="tiles-left" class="ml-2 text-white">0</span>
         </div>
         
         <div id="quest-score-container" class="hidden text-amber-300 font-bold text-sm md:text-lg flex items-center bg-slate-900/50 px-3 py-1 rounded-full border border-slate-700">
@@ -671,14 +631,6 @@
                         </button>
                     </div>
                 `;
-                const portalBtn = document.getElementById('portal-btn');
-                if (portalBtn) {
-                    portalBtn.href = 'https://game.deepbraintechnology.com';
-                    portalBtn.target = '_blank';
-                    portalBtn.rel = 'noopener noreferrer';
-                    portalBtn.textContent = 'Back to Main Portal';
-                    portalBtn.onclick = null;
-                }
             },
             
             setGameMode(mode) {
@@ -693,15 +645,6 @@
                 STATE.savedGridConfig = null; // Clear saved state on mode change
                 
                 document.getElementById('main-modal').classList.add('hidden');
-                
-                const portalBtn = document.getElementById('portal-btn');
-                if (portalBtn) {
-                    portalBtn.removeAttribute('href');
-                    portalBtn.removeAttribute('target');
-                    portalBtn.removeAttribute('rel');
-                    portalBtn.textContent = 'Back to home';
-                    portalBtn.onclick = function() { game.showModeSelection(true); return false; };
-                }
                 
                 this.updateUI(); 
                 this.updateUIModeVisibility();
