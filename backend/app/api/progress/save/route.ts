@@ -29,6 +29,18 @@ export const POST = requireAuth(async (request: NextRequest, payload) => {
       const unlockedFromLevel = Math.min(100, level + 1);
       modeUnlockedLevel = Math.max(modeUnlockedLevel, unlockedFromLevel);
 
+      const existingModeProgress = await prisma.modeProgress.findUnique({
+        where: {
+          portal_user_id_game_mode: {
+            portal_user_id: payload.user_id,
+            game_mode: mode,
+          },
+        },
+        select: { max_unlocked_level: true },
+      });
+      const prevUnlockedLevel = existingModeProgress?.max_unlocked_level ?? 1;
+      const shouldGrantHint = modeUnlockedLevel > prevUnlockedLevel;
+
       await prisma.levelRecord.create({
         data: {
           portal_user_id: payload.user_id,
@@ -39,16 +51,6 @@ export const POST = requireAuth(async (request: NextRequest, payload) => {
           stars: level_data.stars || 1,
           game_mode: mode,
         },
-      });
-
-      const existingModeProgress = await prisma.modeProgress.findUnique({
-        where: {
-          portal_user_id_game_mode: {
-            portal_user_id: payload.user_id,
-            game_mode: mode,
-          },
-        },
-        select: { max_unlocked_level: true },
       });
 
       await prisma.modeProgress.upsert({
@@ -71,8 +73,10 @@ export const POST = requireAuth(async (request: NextRequest, payload) => {
         },
       });
 
-      const updatedHint = await addHintCount(payload.user_id, payload.username, 1);
-      hintCount = updatedHint.hint_count;
+      if (shouldGrantHint) {
+        const updatedHint = await addHintCount(payload.user_id, payload.username, 1);
+        hintCount = updatedHint.hint_count;
+      }
     }
 
     return jsonResponse(
