@@ -1,4 +1,5 @@
-const corsOrigin = process.env.CORS_ORIGIN || '*'
+// 生产环境建议设为前端域名，如 https://chess-tourmaster.pages.dev；不设或设为 * 则允许任意来源
+const corsOrigin = process.env.CORS_ORIGIN || 'chess-tourmaster.deepbraintechnology.com'
 
 export function getCorsHeaders(): HeadersInit {
   return {
