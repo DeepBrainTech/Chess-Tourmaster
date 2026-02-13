@@ -10,6 +10,8 @@ node_modules/
 # Next.js
 /.next/
 /out/
+**/.next/
+**/out/
 
 # Production
 /build
@@ -32,6 +34,7 @@ yarn-error.log*
 
 # TypeScript
 *.tsbuildinfo
+**/*.tsbuildinfo
 next-env.d.ts
 
 # Prisma
