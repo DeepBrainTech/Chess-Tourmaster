@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,36 +7,15 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// 游戏进度表
-model GameProgress {
-  id              Int      @id @default(autoincrement())
-  portal_user_id  Int      @unique // 主站用户 ID，确保唯一性
-  username        String   // 用户名（冗余存储，方便查询）
-  high_score      Int      @default(0) // 最高分数
-  total_levels    Int      @default(0) // 完成的总关卡数
-  best_moves      Int?     // 最少步数记录（最佳通关步数）
-  total_moves     Int      @default(0) // 总移动步数
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
-
-  // 关联关卡记录
-  level_records   LevelRecord[]
-  mode_progresses ModeProgress[]
-
-  @@index([portal_user_id])
-  @@map("game_progress")
-}
-
-// 按模式记录解锁进度
+// Mode-level progress (max unlocked level per user + mode).
 model ModeProgress {
-  id                 Int          @id @default(autoincrement())
+  id                 Int      @id @default(autoincrement())
   portal_user_id     Int
+  username           String
   game_mode          String
-  max_unlocked_level Int          @default(1)
-  updated_at         DateTime     @updatedAt
-  created_at         DateTime     @default(now())
-
-  progress           GameProgress @relation(fields: [portal_user_id], references: [portal_user_id], onDelete: Cascade)
+  max_unlocked_level Int      @default(1)
+  updated_at         DateTime @updatedAt
+  created_at         DateTime @default(now())
 
   @@unique([portal_user_id, game_mode])
   @@index([portal_user_id])
@@ -47,38 +23,20 @@ model ModeProgress {
   @@map("mode_progress")
 }
 
-// 关卡记录表 - 记录每个关卡的详细数据
+// Per-attempt level records (stars/time/moves).
 model LevelRecord {
-  id              Int          @id @default(autoincrement())
-  portal_user_id  Int
-  username        String
-  level           Int          // 关卡编号
-  moves_count     Int          // 通关步数
-  time_seconds    Int          // 通关时间（秒）
-  score           Int          @default(0) // 该关卡得分
-  stars           Int          @default(1) // 星级评价 (1-3)
-  game_mode       String       @default("classic") // 游戏模式: classic, math_tour
-  completed_at    DateTime     @default(now())
-  
-  // 关联进度表
-  progress        GameProgress @relation(fields: [portal_user_id], references: [portal_user_id], onDelete: Cascade)
-
-  @@index([portal_user_id])
-  @@index([level])
-  @@index([moves_count])
-  @@map("level_records")
-}
-
-// 排行榜快照（可选，用于优化查询）
-model Leaderboard {
   id             Int      @id @default(autoincrement())
   portal_user_id Int
   username       String
-  high_score     Int
-  rank           Int?
-  created_at     DateTime @default(now())
+  level          Int
+  moves_count    Int
+  time_seconds   Int
+  stars          Int      @default(1)
+  game_mode      String   @default("classic")
+  completed_at   DateTime @default(now())
 
-  @@index([high_score(sort: Desc)])
   @@index([portal_user_id])
-  @@map("leaderboard")
+  @@index([portal_user_id, game_mode])
+  @@index([portal_user_id, game_mode, level])
+  @@map("level_records")
 }
