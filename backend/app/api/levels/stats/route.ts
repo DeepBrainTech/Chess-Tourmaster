@@ -12,6 +12,8 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
   try {
     const { searchParams } = new URL(request.url);
     const level = searchParams.get('level');
+    const gameMode = searchParams.get('game_mode');
+    const modeFilter = gameMode === 'classic' || gameMode === 'math_tour' ? gameMode : null;
 
     if (level) {
       const levelNum = parseInt(level, 10);
@@ -19,6 +21,7 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
         where: {
           portal_user_id: payload.user_id,
           level: levelNum,
+          ...(modeFilter ? { game_mode: modeFilter } : {}),
         },
         orderBy: { completed_at: 'desc' },
         take: 10,
@@ -28,6 +31,7 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
         where: {
           portal_user_id: payload.user_id,
           level: levelNum,
+          ...(modeFilter ? { game_mode: modeFilter } : {}),
         },
         orderBy: { moves_count: 'asc' },
       });
@@ -45,7 +49,10 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
     } else {
       // 获取所有关卡的概览
       const allRecords = await prisma.levelRecord.findMany({
-        where: { portal_user_id: payload.user_id },
+        where: {
+          portal_user_id: payload.user_id,
+          ...(modeFilter ? { game_mode: modeFilter } : {}),
+        },
         orderBy: { level: 'asc' },
       });
 
@@ -58,6 +65,7 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
             best_moves: record.moves_count,
             best_time: record.time_seconds,
             total_stars: 0,
+            best_stars: 0,
           };
         }
         acc[record.level].attempts++;
@@ -67,7 +75,10 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
         if (record.time_seconds < acc[record.level].best_time) {
           acc[record.level].best_time = record.time_seconds;
         }
-        acc[record.level].total_stars = Math.max(acc[record.level].total_stars, record.stars);
+        const levelBestStars = Math.max(acc[record.level].best_stars, record.stars);
+        acc[record.level].best_stars = levelBestStars;
+        // Keep legacy field for compatibility with existing frontend usage.
+        acc[record.level].total_stars = levelBestStars;
         return acc;
       }, {});
 

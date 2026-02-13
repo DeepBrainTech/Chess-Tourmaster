@@ -6,20 +6,27 @@ type WinData = {
   level: number;
   time: string;
   stars: number;
-  levelBonus: number;
-  currentScore: number;
-  baseScore: number;
-  isNewHighScore: boolean;
-  streak: number;
-  streakBonus: number;
+  isFinalLevel: boolean;
 };
+
+type LeaderboardEntry = {
+  rank: number;
+  username: string;
+  total_levels: number;
+};
+type LeaderboardMode = 'classic' | 'math_tour';
 
 type Props = {
   type: ModalType;
   gameMode: 'classic' | 'math_tour';
-  highScore: number;
   winData: WinData | null;
+  username?: string;
+  leaderboard: LeaderboardEntry[];
+  leaderboardLoading: boolean;
+  leaderboardMode: LeaderboardMode;
   onSetMode: (mode: 'classic' | 'math_tour') => void;
+  onOpenLeaderboard: () => void;
+  onChangeLeaderboardMode: (mode: LeaderboardMode) => void;
   onStartLevel: () => void;
   onNextLevel: () => void;
   onRetry: () => void;
@@ -40,9 +47,14 @@ const THEME_BUTTONS: { name: ThemeName; label: string; btnClass: string }[] = [
 export default function MainModal({
   type,
   gameMode,
-  highScore,
   winData,
+  username,
+  leaderboard,
+  leaderboardLoading,
+  leaderboardMode,
   onSetMode,
+  onOpenLeaderboard,
+  onChangeLeaderboardMode,
   onStartLevel,
   onNextLevel,
   onRetry,
@@ -52,7 +64,7 @@ export default function MainModal({
   if (type === 'none') return null;
 
   const isMathTour = gameMode === 'math_tour';
-  const isOverlayModal = type === 'settings' || type === 'help';
+  const isOverlayModal = type === 'settings' || type === 'help' || type === 'leaderboard';
 
   return (
     <div
@@ -108,16 +120,16 @@ export default function MainModal({
             {isMathTour && (
               <li className="flex items-start">
                 <i className="fas fa-plus w-6 text-amber-400 mt-1" />
-                <span><strong>Gather:</strong> Collect tile points to meet score requirement for King capture.</span>
+                <span><strong>Tour:</strong> Different map pool from Classic mode.</span>
               </li>
             )}
             <li className="flex items-start">
               <i className="fas fa-fire w-6 text-orange-500 mt-1" />
-              <span><strong>Fire:</strong> 3s to move or burn! (In Math Tour, landing on fire grants x2 score on the next move).</span>
+              <span><strong>Fire:</strong> 3s to move or burn!</span>
             </li>
             <li className="flex items-start">
               <i className="fas fa-chess-king w-6 text-rose-500 mt-1" />
-              <span><strong>Win:</strong> {isMathTour ? 'Meet score requirement' : 'Clear board'} to capture King.</span>
+              <span><strong>Win:</strong> Clear board to capture King.</span>
             </li>
           </ul>
           <button
@@ -127,6 +139,86 @@ export default function MainModal({
           >
             Close
           </button>
+        </div>
+      )}
+
+      {type === 'leaderboard' && onCloseOverlay && (
+        <div
+          className="w-full max-w-2xl m-4 rounded-2xl border-2 border-amber-400/80 bg-gradient-to-br from-rose-900 via-red-800 to-amber-600 p-4 md:p-6 shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-2xl md:text-3xl font-bold text-white fantasy-font">
+              <i className="fas fa-trophy text-amber-300 mr-3" />
+              Leaderboard
+            </h3>
+            <button
+              type="button"
+              onClick={onCloseOverlay}
+              className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white"
+              aria-label="Close leaderboard"
+            >
+              <i className="fas fa-times" />
+            </button>
+          </div>
+          <p className="text-sm text-amber-100/90 mb-3">Total Levels Unlocked</p>
+          <div className="flex items-center gap-2 mb-3">
+            <button
+              type="button"
+              onClick={() => onChangeLeaderboardMode('classic')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold border ${
+                leaderboardMode === 'classic'
+                  ? 'bg-white/20 border-amber-300 text-white'
+                  : 'bg-black/20 border-white/20 text-white/80 hover:bg-black/30'
+              }`}
+            >
+              Classic Tour
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeLeaderboardMode('math_tour')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold border ${
+                leaderboardMode === 'math_tour'
+                  ? 'bg-white/20 border-amber-300 text-white'
+                  : 'bg-black/20 border-white/20 text-white/80 hover:bg-black/30'
+              }`}
+            >
+              Math Tour
+            </button>
+          </div>
+          <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+            {leaderboardLoading ? (
+              <div className="rounded-xl bg-black/20 border border-white/15 px-4 py-3 text-white/80 text-sm">
+                Loading...
+              </div>
+            ) : leaderboard.length === 0 ? (
+              <div className="rounded-xl bg-black/20 border border-white/15 px-4 py-3 text-white/80 text-sm">
+                No records yet
+              </div>
+            ) : (
+              leaderboard.map((entry) => {
+                const isCurrentUser = username != null && username !== '' && entry.username === username;
+                return (
+                  <div
+                    key={`${entry.rank}-${entry.username}`}
+                    className={`rounded-xl px-4 py-3 border ${
+                      isCurrentUser
+                        ? 'bg-white/15 border-amber-300 text-white'
+                        : 'bg-black/20 border-white/15 text-white/95'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold">
+                        {entry.rank}. {entry.username}
+                        {isCurrentUser ? ' (You)' : ''}
+                      </span>
+                      <span className="font-bold text-amber-200">Level {entry.total_levels}</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       )}
 
@@ -157,6 +249,14 @@ export default function MainModal({
               >
                 Math Tour
               </button>
+              <button
+                type="button"
+                onClick={onOpenLeaderboard}
+                className="w-full bg-violet-600 hover:bg-violet-500 text-white font-bold py-3 rounded-xl transition"
+              >
+                <i className="fas fa-trophy mr-2 text-amber-300" />
+                Leaderboard
+              </button>
             </div>
           </>
         )}
@@ -171,12 +271,7 @@ export default function MainModal({
               {isMathTour ? 'Math Tour' : 'Classic Tour'}
             </h2>
             <p className="text-gray-300 mb-4 text-sm">
-              {isMathTour
-                ? 'Collect enough score and capture the King.'
-                : 'Clear every tile and capture the King.'}
-            </p>
-            <p className="text-lg font-mono text-yellow-300 mb-4 fantasy-font">
-              HIGH SCORE: {highScore.toLocaleString()}
+              Clear every tile and capture the King.
             </p>
             <button
               type="button"
@@ -209,41 +304,17 @@ export default function MainModal({
               Checkmate!
             </h2>
             <p className="text-gray-300 mb-1">
-              Level {winData.level} Complete
+              {winData.isFinalLevel ? 'Level 100 Complete - All Levels Cleared!' : `Level ${winData.level} Complete`}
             </p>
             <p className="text-xl font-bold text-cyan-400 mb-4">
               Time: {winData.time}
             </p>
-            <div className="mt-4 border-t border-slate-700 pt-3 text-left text-sm text-gray-400">
-              <p>
-                Level Bonus:{' '}
-                <span className="text-lime-400 font-bold">
-                  +{winData.levelBonus.toLocaleString()}
-                </span>
-              </p>
-              {winData.streak > 1 && (
-                <p>
-                  Streak x{winData.streak} Bonus:{' '}
-                  <span className="text-yellow-400 font-bold">
-                    +{winData.streakBonus.toLocaleString()}
-                  </span>
-                </p>
-              )}
-              <p className="text-xl font-bold text-yellow-300 mt-1">
-                Total Score: {winData.currentScore.toLocaleString()}
-              </p>
-              {winData.isNewHighScore && (
-                <p className="text-sm font-bold text-rose-500 mt-2">
-                  NEW HIGH SCORE! (Base: {winData.baseScore.toLocaleString()})
-                </p>
-              )}
-            </div>
             <button
               type="button"
               onClick={onNextLevel}
               className="mt-6 w-full bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 text-white font-bold py-3 rounded-xl shadow-lg transition"
             >
-              Next Level
+              {winData.isFinalLevel ? 'Back to Mode Select' : 'Next Level'}
             </button>
           </>
         )}
@@ -257,9 +328,6 @@ export default function MainModal({
               Defeat
             </h2>
             <p className="text-gray-300 mb-4">Trapped or burned!</p>
-            <p className="text-lg font-mono text-yellow-300 mb-4 fantasy-font">
-              HIGH SCORE: {highScore.toLocaleString()}
-            </p>
             <button
               type="button"
               onClick={onRetry}

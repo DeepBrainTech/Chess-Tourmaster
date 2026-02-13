@@ -6,8 +6,6 @@ type Props = {
   tile: TileData;
   isKnight: boolean;
   isValidMove: boolean;
-  scoreMultiplier: number;
-  isMathTour: boolean;
   onClick: () => void;
 };
 
@@ -15,8 +13,6 @@ export default function Tile({
   tile,
   isKnight,
   isValidMove,
-  scoreMultiplier,
-  isMathTour,
   onClick,
 }: Props) {
   const isVoid = tile.type === 'void';
@@ -54,12 +50,6 @@ export default function Tile({
         }
       }}
     >
-      {isMathTour && tile.value > 0 && (
-        <span className="quest-value absolute top-0.5 right-1 text-xs font-bold text-amber-300">
-          +{tile.value}
-          {scoreMultiplier > 1 ? `x${scoreMultiplier}` : ''}
-        </span>
-      )}
       {tile.hasFire && (
         <i className="fas fa-fire text-2xl sm:text-3xl text-orange-500 fire-anim opacity-90" />
       )}

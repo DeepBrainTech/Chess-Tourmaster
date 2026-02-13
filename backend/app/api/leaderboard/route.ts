@@ -11,9 +11,51 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '10', 10);
+    const sort = searchParams.get('sort') || 'score';
+    const mode = searchParams.get('mode');
+
+    if (sort === 'levels' && (mode === 'classic' || mode === 'math_tour')) {
+      const safeLimit = Math.min(Math.max(limit, 1), 100);
+      const modeLeaderboard = await prisma.$queryRaw<
+        Array<{
+          portal_user_id: number;
+          username: string;
+          total_levels: bigint | number;
+          updated_at: Date;
+        }>
+      >`
+        SELECT
+          portal_user_id,
+          username,
+          COUNT(DISTINCT level)::bigint AS total_levels,
+          MAX(completed_at) AS updated_at
+        FROM level_records
+        WHERE game_mode = ${mode}
+        GROUP BY portal_user_id, username
+        ORDER BY total_levels DESC, updated_at ASC
+        LIMIT ${safeLimit}
+      `;
+
+      const rankedModeLeaderboard = modeLeaderboard.map((entry, index) => ({
+        ...entry,
+        total_levels: Number(entry.total_levels),
+        rank: index + 1,
+      }));
+
+      return jsonResponse({
+        success: true,
+        message: 'Leaderboard loaded successfully',
+        data: rankedModeLeaderboard,
+      }, undefined, origin);
+    }
+
+    const orderBy =
+      sort === 'levels'
+        ? [{ total_levels: 'desc' as const }, { high_score: 'desc' as const }, { updated_at: 'asc' as const }]
+        : [{ high_score: 'desc' as const }, { total_levels: 'desc' as const }, { updated_at: 'asc' as const }];
 
     const leaderboard = await prisma.gameProgress.findMany({
-      orderBy: { high_score: 'desc' },
+      orderBy,
       take: Math.min(limit, 100),
       select: {
         portal_user_id: true,

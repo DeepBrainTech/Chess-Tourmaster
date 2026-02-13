@@ -11,6 +11,9 @@ export type GameAction =
   | { type: 'SET_GAME_TIME'; payload: number }
   | { type: 'SET_THEME'; payload: ThemeName }
   | { type: 'LOAD_HIGH_SCORE'; payload: number }
+  | { type: 'SET_MAX_UNLOCKED_LEVEL'; payload: number }
+  | { type: 'SET_LEVEL_STARS'; payload: Record<number, number> }
+  | { type: 'UPSERT_LEVEL_STAR'; payload: { level: number; stars: number } }
   | { type: 'WIN_LEVEL'; payload: { levelBonus: number; streakBonus: number } }
   | { type: 'LOSE_LEVEL' }
   | { type: 'RESET_RUN' }
@@ -21,6 +24,8 @@ const deepCopyGrid = (grid: GameState['grid']) =>
 
 export const initialGameState: GameState = {
   level: 1,
+  maxUnlockedLevel: 1,
+  levelStars: {},
   grid: [],
   knightPos: { r: 0, c: 0 },
   kingPos: { r: 0, c: 0 },
@@ -50,6 +55,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         gameMode: action.payload,
         level: 1,
+        maxUnlockedLevel: 1,
+        levelStars: {},
         currentRunScore: 0,
         cumulativeBaseScore: 0,
         streak: 0,
@@ -91,15 +98,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (targetTile.type === 'void' || targetTile.visited) return state;
       if (targetTile.type === 'king') {
         const hasCleared = state.tilesLeft === 0;
-        if (state.gameMode === 'classic' && !hasCleared) return state;
-        if (isMathTour && state.currentScore < state.requiredScore) return state;
+        if (!hasCleared) return state;
         return state;
       }
 
       const collectedValue = targetTile.value;
       const multiplierUsed = state.scoreMultiplier;
-      const finalScore = isMathTour ? collectedValue * multiplierUsed : 0;
-      const multiplierAfterMove = targetTile.hasFire ? 2 : 1;
+      const finalScore = 0;
+      const multiplierAfterMove = 1;
 
       const newGrid = deepCopyGrid(state.grid);
       const newTile = { ...newGrid[r][c], visited: true };
@@ -153,6 +159,24 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'LOAD_HIGH_SCORE':
       return { ...state, highScore: action.payload };
 
+    case 'SET_MAX_UNLOCKED_LEVEL':
+      return { ...state, maxUnlockedLevel: action.payload };
+
+    case 'SET_LEVEL_STARS':
+      return { ...state, levelStars: action.payload };
+
+    case 'UPSERT_LEVEL_STAR': {
+      const prev = state.levelStars[action.payload.level] ?? 0;
+      if (action.payload.stars <= prev) return state;
+      return {
+        ...state,
+        levelStars: {
+          ...state.levelStars,
+          [action.payload.level]: action.payload.stars,
+        },
+      };
+    }
+
     case 'WIN_LEVEL': {
       const { levelBonus, streakBonus } = action.payload;
       const newCumulative = state.cumulativeBaseScore + levelBonus;
@@ -202,10 +226,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 }
 
 export function canMoveToKing(state: GameState): boolean {
-  const isMathTour = state.gameMode === 'math_tour';
-  const hasEnoughScore = state.currentScore >= state.requiredScore;
   const tilesCleared = state.tilesLeft === 0;
-  return isMathTour ? hasEnoughScore : tilesCleared && hasEnoughScore;
+  return tilesCleared;
 }
 
 export function isValidMove(state: GameState, r: number, c: number): boolean {

@@ -9,16 +9,33 @@ import { jsonResponse, optionsResponse } from '@/lib/http';
  */
 export const GET = requireAuth(async (request: NextRequest, payload) => {
   try {
+    const { searchParams } = new URL(request.url);
+    const gameMode = searchParams.get('game_mode');
     const progress = await prisma.gameProgress.findUnique({
       where: { portal_user_id: payload.user_id },
     });
 
     const origin = request.headers.get('Origin');
+    const hasModeFilter = gameMode === 'classic' || gameMode === 'math_tour';
+    let modeUnlockedLevel = 1;
+
+    if (hasModeFilter) {
+      const modeMax = await prisma.levelRecord.aggregate({
+        where: {
+          portal_user_id: payload.user_id,
+          game_mode: gameMode,
+        },
+        _max: { level: true },
+      });
+      const maxCompleted = modeMax._max.level ?? 0;
+      modeUnlockedLevel = Math.max(1, Math.min(100, maxCompleted + 1));
+    }
+
     if (!progress) {
       return jsonResponse({
         success: true,
         message: 'No progress found',
-        data: { high_score: 0, total_levels: 0 },
+        data: { high_score: 0, total_levels: hasModeFilter ? modeUnlockedLevel : 0 },
       }, undefined, origin);
     }
 
@@ -27,7 +44,7 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
       message: 'Progress loaded successfully',
       data: {
         high_score: progress.high_score,
-        total_levels: progress.total_levels,
+        total_levels: hasModeFilter ? modeUnlockedLevel : progress.total_levels,
         best_moves: progress.best_moves,
         total_moves: progress.total_moves,
       },

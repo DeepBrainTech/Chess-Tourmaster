@@ -12,8 +12,6 @@ type Props = {
 
 export default function Board({ state, onMove, shake }: Props) {
   const size = state.gridSizeVal;
-  const isMathTour = state.gameMode === 'math_tour';
-  const hasEnoughScore = state.currentScore >= state.requiredScore;
 
   if (!state.grid.length) {
     return (
@@ -42,8 +40,6 @@ export default function Board({ state, onMove, shake }: Props) {
               tile={tile}
               isKnight={isKnight}
               isValidMove={valid}
-              scoreMultiplier={state.scoreMultiplier}
-              isMathTour={isMathTour}
               onClick={() => onMove(r, c)}
             />
           );

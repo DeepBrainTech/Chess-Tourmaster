@@ -31,6 +31,8 @@ export interface HistoryEntry {
 
 export interface GameState {
   level: number;
+  maxUnlockedLevel: number;
+  levelStars: Record<number, number>;
   grid: TileData[][];
   knightPos: { r: number; c: number };
   kingPos: { r: number; c: number };
@@ -53,7 +55,7 @@ export interface GameState {
   theme: string;
 }
 
-export type ModalType = 'none' | 'mode' | 'welcome' | 'win' | 'lose' | 'settings' | 'help';
+export type ModalType = 'none' | 'mode' | 'welcome' | 'win' | 'lose' | 'settings' | 'help' | 'leaderboard';
 export type ThemeName = 'cosmic' | 'royal' | 'nature' | 'inferno' | 'desert' | 'frost' | 'volcanic';
 
 export const THEME_CLASSES: Record<ThemeName, string> = {

@@ -1,12 +1,15 @@
 'use client';
 
+import { MAX_LEVELS } from '@/lib/game/levelCatalog';
+
 type Props = {
   gameMode: 'classic' | 'math_tour';
   level: number;
+  maxUnlockedLevel: number;
+  levelStars: Record<number, number>;
   username?: string;
   tilesLeft: number;
-  currentScore: number;
-  requiredScore: number;
+  onSelectLevel: (level: number) => void;
   onUndo: () => void;
   onRestart: () => void;
   onSettings: () => void;
@@ -22,17 +25,17 @@ function formatTime(seconds: number): string {
 export default function GameHeader({
   gameMode,
   level,
+  maxUnlockedLevel,
+  levelStars,
   username,
   tilesLeft,
-  currentScore,
-  requiredScore,
+  onSelectLevel,
   onUndo,
   onRestart,
   onSettings,
   onHelp,
 }: Props) {
   const isMathTour = gameMode === 'math_tour';
-  const scoreOk = currentScore >= requiredScore;
 
   return (
     <div className="z-10 w-full max-w-2xl px-4 mb-2 flex justify-between items-center">
@@ -45,9 +48,27 @@ export default function GameHeader({
             {isMathTour ? 'Math Tour' : 'Classic Tour'}
           </span>
           <span className="text-gray-500">|</span>
-          <span>
-            Lvl <span className="font-bold text-white">{level}</span>
-          </span>
+          <label className="flex items-center gap-2">
+            <span>Lv.</span>
+            <select
+              value={level}
+              onChange={(e) => onSelectLevel(Number(e.target.value))}
+              className="bg-slate-800 border border-slate-600 rounded px-2 py-0.5 text-white text-xs md:text-sm"
+            >
+              {Array.from({ length: MAX_LEVELS }, (_, index) => {
+                const optionLevel = index + 1;
+                const locked = optionLevel > maxUnlockedLevel;
+                const stars = levelStars[optionLevel] ?? 0;
+                const starsLabel = stars > 0 ? ` - ${'\u2B50'.repeat(stars)}` : '';
+                return (
+                  <option key={optionLevel} value={optionLevel} disabled={locked}>
+                    {locked ? `Lv. ${optionLevel} (Locked)` : `Lv. ${optionLevel}${starsLabel}`}
+                  </option>
+                );
+              })}
+            </select>
+            <span className="text-white">/ {MAX_LEVELS}</span>
+          </label>
           {username != null && username !== '' && (
             <>
               <span className="text-gray-500">|</span>
@@ -98,21 +119,12 @@ export default function GameHeader({
 }
 
 export function TilesAndScoreBar({
-  gameMode,
   tilesLeft,
   gameTimeSeconds,
-  currentScore,
-  requiredScore,
 }: {
-  gameMode: 'classic' | 'math_tour';
   tilesLeft: number;
   gameTimeSeconds: number;
-  currentScore: number;
-  requiredScore: number;
 }) {
-  const isMathTour = gameMode === 'math_tour';
-  const scoreOk = currentScore >= requiredScore;
-
   return (
     <div className="z-10 w-full max-w-2xl px-4 mb-2 flex flex-wrap justify-between items-center h-8">
       <div className="text-cyan-300 font-bold text-sm md:text-lg flex items-center gap-3 bg-slate-900/50 px-3 py-1 rounded-full border border-slate-700">
@@ -125,16 +137,6 @@ export function TilesAndScoreBar({
           {formatTime(gameTimeSeconds)}
         </span>
       </div>
-      {isMathTour && (
-        <div
-          className={`font-bold text-sm md:text-lg flex items-center bg-slate-900/50 px-3 py-1 rounded-full border border-slate-700 ${
-            scoreOk ? 'text-lime-400' : 'text-amber-300'
-          }`}
-        >
-          Score: <span className="ml-1 text-white">{currentScore}</span> /{' '}
-          <span className="text-white">{requiredScore}</span>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,6 +1,26 @@
 import type { GameMode } from './types';
 import type { LevelConfig, TileData } from './types';
 
+function hashString(input: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function createRng(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6D2B79F5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 function getValidMoves(r: number, c: number, size: number): { r: number; c: number }[] {
   const moves = [
     { r: r - 2, c: c - 1 }, { r: r - 2, c: c + 1 },
@@ -12,6 +32,9 @@ function getValidMoves(r: number, c: number, size: number): { r: number; c: numb
 }
 
 export function generateLevelConfig(levelNum: number, gameMode: GameMode): LevelConfig {
+  const seed = hashString(`tourmaster:${gameMode}:${levelNum}`);
+  const rng = createRng(seed);
+
   const config: LevelConfig = {
     level: levelNum,
     grid: [],
@@ -35,8 +58,8 @@ export function generateLevelConfig(levelNum: number, gameMode: GameMode): Level
   else if (levelNum === 3) maxPathLength = 12;
   else if (levelNum === 4) maxPathLength = 18;
 
-  let cr = Math.floor(Math.random() * size);
-  let cc = Math.floor(Math.random() * size);
+  let cr = Math.floor(rng() * size);
+  let cc = Math.floor(rng() * size);
   config.kingPos = { r: cr, c: cc };
 
   let path = [{ r: cr, c: cc }];
@@ -48,7 +71,7 @@ export function generateLevelConfig(levelNum: number, gameMode: GameMode): Level
     const moves = getValidMoves(curr.r, curr.c, size);
     const validNext = moves.filter(m => grid[m.r][m.c] === 0);
     if (validNext.length === 0) break;
-    const next = validNext[Math.floor(Math.random() * validNext.length)];
+    const next = validNext[Math.floor(rng() * validNext.length)];
     grid[next.r][next.c] = 1;
     path.push(next);
     curr = next;
@@ -56,17 +79,17 @@ export function generateLevelConfig(levelNum: number, gameMode: GameMode): Level
   }
 
   if (path.length < maxPathLength) {
-    curr = path[Math.floor(Math.random() * path.length)];
+    curr = path[Math.floor(rng() * path.length)];
     attempts = 1000;
     while (path.length < maxPathLength && attempts > 0) {
       const moves = getValidMoves(curr.r, curr.c, size);
       const validNext = moves.filter(m => grid[m.r][m.c] === 0);
       if (validNext.length === 0) {
-        curr = path[Math.floor(Math.random() * path.length)];
+        curr = path[Math.floor(rng() * path.length)];
         attempts--;
         continue;
       }
-      const next = validNext[Math.floor(Math.random() * validNext.length)];
+      const next = validNext[Math.floor(rng() * validNext.length)];
       grid[next.r][next.c] = 1;
       path.push(next);
       curr = next;
@@ -95,9 +118,9 @@ export function generateLevelConfig(levelNum: number, gameMode: GameMode): Level
 
       if (isPath && !isStart && !isKing) {
         tilesToVisit++;
-        if (Math.random() < (0.05 + levelNum * 0.02)) hasFire = true;
+        if (rng() < (0.05 + levelNum * 0.02)) hasFire = true;
         if (gameMode === 'math_tour') {
-          value = Math.floor(Math.random() * 4) + 2;
+          value = Math.floor(rng() * 4) + 2;
           maxPossibleBaseScore += value;
         }
       }

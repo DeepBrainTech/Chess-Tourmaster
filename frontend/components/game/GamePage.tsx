@@ -8,11 +8,10 @@ import {
   canMoveToKing,
   isStuck,
 } from '@/lib/game/gameReducer';
-import { generateLevelConfig } from '@/lib/game/levelGenerator';
+import { getFixedLevelConfig, MAX_LEVELS } from '@/lib/game/levelCatalog';
 import {
   initSound,
   playMove,
-  playCollect,
   playVictory,
   playBurn,
   speak,
@@ -28,12 +27,7 @@ type WinData = {
   level: number;
   time: string;
   stars: number;
-  levelBonus: number;
-  currentScore: number;
-  baseScore: number;
-  isNewHighScore: boolean;
-  streak: number;
-  streakBonus: number;
+  isFinalLevel: boolean;
 };
 
 function formatTime(seconds: number): string {
@@ -42,35 +36,88 @@ function formatTime(seconds: number): string {
   return `${m}:${s}`;
 }
 
+function normalizeUnlockedLevel(value: unknown): number {
+  if (typeof value !== 'number' || Number.isNaN(value)) return 1;
+  return Math.max(1, Math.min(MAX_LEVELS, Math.floor(value)));
+}
+
+function normalizeStars(value: unknown): number {
+  if (typeof value !== 'number' || Number.isNaN(value)) return 0;
+  return Math.max(0, Math.min(3, Math.floor(value)));
+}
+
 type Props = { token: string | null; username: string };
+type LeaderboardEntry = {
+  rank: number;
+  username: string;
+  total_levels: number;
+};
+type LeaderboardMode = 'classic' | 'math_tour';
 
 export default function GamePage({ token, username }: Props) {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
   const [modalType, setModalType] = useState<ModalType>('mode');
   const [winData, setWinData] = useState<WinData | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [leaderboardMode, setLeaderboardMode] = useState<LeaderboardMode>('classic');
   const [message, setMessage] = useState<{ text: string; className: string } | null>(null);
   const [shake, setShake] = useState(false);
   const fireStartRef = useRef<number>(0);
   const lastSpokenSecondRef = useRef<number>(4);
 
-  const loadProgress = useCallback(async () => {
+  const loadProgress = useCallback(async (mode: 'classic' | 'math_tour') => {
     if (!token) return null;
     try {
-      const res = await fetch(`${getApiBase()}/api/progress/load`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success && data.data?.high_score != null) {
-        dispatch({ type: 'LOAD_HIGH_SCORE', payload: data.data.high_score });
+      const [progressRes, statsRes] = await Promise.all([
+        fetch(`${getApiBase()}/api/progress/load?game_mode=${mode}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${getApiBase()}/api/levels/stats?game_mode=${mode}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+
+      const progressData = await progressRes.json();
+      if (progressData.success && progressData.data?.high_score != null) {
+        dispatch({ type: 'LOAD_HIGH_SCORE', payload: progressData.data.high_score });
       }
-      return data.data;
+      if (progressData.success && progressData.data?.total_levels != null) {
+        dispatch({
+          type: 'SET_MAX_UNLOCKED_LEVEL',
+          payload: normalizeUnlockedLevel(progressData.data.total_levels),
+        });
+      }
+
+      const statsData = await statsRes.json();
+      if (statsData.success && Array.isArray(statsData.data?.levels)) {
+        const starsMap: Record<number, number> = {};
+        for (const item of statsData.data.levels) {
+          if (!item || typeof item.level !== 'number') continue;
+          const bestStars = normalizeStars(
+            typeof item.best_stars === 'number'
+              ? item.best_stars
+              : typeof item.total_stars === 'number'
+                ? item.total_stars
+                : item.stars
+          );
+          starsMap[item.level] = Math.max(starsMap[item.level] ?? 0, bestStars);
+        }
+        dispatch({ type: 'SET_LEVEL_STARS', payload: starsMap });
+      }
+
+      return progressData.data;
     } catch {
       return null;
     }
   }, [token]);
 
   const saveProgress = useCallback(
-    async (highScore: number) => {
+    async (
+      highScore: number,
+      maxUnlockedLevel: number,
+      levelData?: { level: number; moves_count: number; time_seconds: number; score: number; stars: number; game_mode: 'classic' | 'math_tour' }
+    ) => {
       if (!token) return;
       try {
         await fetch(`${getApiBase()}/api/progress/save`, {
@@ -81,7 +128,8 @@ export default function GamePage({ token, username }: Props) {
           },
           body: JSON.stringify({
             high_score: highScore,
-            total_levels: 0,
+            total_levels: maxUnlockedLevel,
+            level_data: levelData,
           }),
         });
       } catch (e) {
@@ -91,9 +139,38 @@ export default function GamePage({ token, username }: Props) {
     [token]
   );
 
+  const loadLeaderboard = useCallback(async (mode: LeaderboardMode) => {
+    setLeaderboardLoading(true);
+    try {
+      const res = await fetch(`${getApiBase()}/api/leaderboard?sort=levels&mode=${mode}&limit=10`);
+      const data = await res.json();
+      if (!data?.success || !Array.isArray(data.data)) {
+        setLeaderboard([]);
+        return;
+      }
+      const parsed = data.data
+        .filter((item: any) => item && typeof item.username === 'string')
+        .map((item: any, index: number) => ({
+          rank: typeof item.rank === 'number' ? item.rank : index + 1,
+          username: item.username,
+          total_levels: normalizeUnlockedLevel(item.total_levels),
+        }));
+      setLeaderboard(parsed);
+    } catch {
+      setLeaderboard([]);
+    } finally {
+      setLeaderboardLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    loadProgress();
-  }, [loadProgress]);
+    loadProgress(state.gameMode);
+  }, [loadProgress, state.gameMode]);
+
+  useEffect(() => {
+    if (modalType !== 'mode' && modalType !== 'leaderboard') return;
+    loadLeaderboard(leaderboardMode);
+  }, [modalType, leaderboardMode, loadLeaderboard]);
 
   // Game timer
   useEffect(() => {
@@ -151,7 +228,7 @@ export default function GamePage({ token, username }: Props) {
       if (tile.type === 'king') {
         if (!canMoveToKing(state)) {
           setMessage({
-            text: state.gameMode === 'classic' ? 'Guards remain!' : `Need ${state.requiredScore - state.currentScore} more score!`,
+            text: 'Clear all tiles first!',
             className: 'text-rose-400',
           });
           setTimeout(() => setMessage(null), 1500);
@@ -169,10 +246,8 @@ export default function GamePage({ token, username }: Props) {
         setTimeout(() => setShake(false), 500);
         return;
       }
-      const collectedValue = state.gameMode === 'math_tour' ? tile.value * state.scoreMultiplier : 0;
       dispatch({ type: 'MOVE', payload: { r, c } });
       playMove();
-      if (state.gameMode === 'math_tour' && collectedValue > 0) playCollect();
     },
     [state]
   );
@@ -183,28 +258,27 @@ export default function GamePage({ token, username }: Props) {
     let stars = 1;
     if (elapsed <= state.parTime) stars = 3;
     else if (elapsed <= state.parTime * 1.5) stars = 2;
-    const levelBonus = Math.floor(Math.random() * 501) + 500;
-    const streakBonus = state.streak * 100;
-    const newCumulative = state.cumulativeBaseScore + levelBonus;
-    const newStreak = state.streak + 1;
-    const newRunScore = state.currentRunScore + levelBonus + streakBonus;
-    const isNewHigh = newCumulative > state.highScore;
-    if (isNewHigh) saveProgress(newCumulative);
+    const nextUnlockedLevel = Math.min(MAX_LEVELS, Math.max(state.maxUnlockedLevel, state.level + 1));
+    saveProgress(state.highScore, nextUnlockedLevel, {
+      level: state.level,
+      moves_count: state.history.length,
+      time_seconds: state.gameTimeSeconds,
+      score: 0,
+      stars,
+      game_mode: state.gameMode,
+    });
+    dispatch({ type: 'SET_MAX_UNLOCKED_LEVEL', payload: nextUnlockedLevel });
+    dispatch({ type: 'UPSERT_LEVEL_STAR', payload: { level: state.level, stars } });
 
     dispatch({
       type: 'WIN_LEVEL',
-      payload: { levelBonus, streakBonus },
+      payload: { levelBonus: 0, streakBonus: 0 },
     });
     setWinData({
       level: state.level,
       time: formatTime(state.gameTimeSeconds),
       stars,
-      levelBonus,
-      currentScore: newRunScore,
-      baseScore: newCumulative,
-      isNewHighScore: isNewHigh,
-      streak: newStreak,
-      streakBonus,
+      isFinalLevel: state.level >= MAX_LEVELS,
     });
     setModalType('win');
   }
@@ -219,7 +293,7 @@ export default function GamePage({ token, username }: Props) {
       if (useSaved && state.savedGridConfig && state.savedGridConfig.level === level) {
         config = state.savedGridConfig;
       } else {
-        config = generateLevelConfig(level, state.gameMode);
+        config = getFixedLevelConfig(level, state.gameMode);
         dispatch({ type: 'SET_SAVED_CONFIG', payload: config });
       }
       dispatch({ type: 'START_LEVEL', payload: config });
@@ -229,6 +303,11 @@ export default function GamePage({ token, username }: Props) {
   );
 
   const nextLevel = useCallback(() => {
+    if (state.level >= MAX_LEVELS) {
+      dispatch({ type: 'SET_SAVED_CONFIG', payload: null });
+      setModalType('mode');
+      return;
+    }
     dispatch({ type: 'SET_SAVED_CONFIG', payload: null });
     startLevel(state.level + 1, false);
   }, [state.level, startLevel]);
@@ -245,6 +324,16 @@ export default function GamePage({ token, username }: Props) {
     dispatch({ type: 'SET_MODE', payload: mode });
     setModalType('welcome');
   }, []);
+
+  const handleSelectLevel = useCallback(
+    (selectedLevel: number) => {
+      const level = Math.max(1, Math.min(MAX_LEVELS, Math.floor(selectedLevel)));
+      if (level > state.maxUnlockedLevel || level === state.level) return;
+      dispatch({ type: 'SET_SAVED_CONFIG', payload: null });
+      startLevel(level, false);
+    },
+    [state.level, state.maxUnlockedLevel, startLevel]
+  );
 
   const isHomeView = modalType === 'mode';
 
@@ -267,21 +356,19 @@ export default function GamePage({ token, username }: Props) {
           <GameHeader
             gameMode={state.gameMode}
             level={state.level}
+            maxUnlockedLevel={state.maxUnlockedLevel}
+            levelStars={state.levelStars}
             username={username}
             tilesLeft={state.tilesLeft}
-            currentScore={state.currentScore}
-            requiredScore={state.requiredScore}
+            onSelectLevel={handleSelectLevel}
             onUndo={() => dispatch({ type: 'UNDO' })}
             onRestart={restartLevel}
             onSettings={() => setModalType('settings')}
             onHelp={() => setModalType('help')}
           />
           <TilesAndScoreBar
-            gameMode={state.gameMode}
             tilesLeft={state.tilesLeft}
             gameTimeSeconds={state.gameTimeSeconds}
-            currentScore={state.currentScore}
-            requiredScore={state.requiredScore}
           />
           <Board state={state} onMove={handleMove} shake={shake} />
           {message && (
@@ -300,7 +387,7 @@ export default function GamePage({ token, username }: Props) {
         <p>
           Goal:{' '}
           {state.gameMode === 'math_tour'
-            ? 'Collect score → Capture King'
+            ? 'Clear board → Capture King'
             : 'Clear board → Capture King'}
           <span className="text-rose-500 font-bold"> King</span>
         </p>
@@ -309,15 +396,24 @@ export default function GamePage({ token, username }: Props) {
       <MainModal
         type={modalType}
         gameMode={state.gameMode}
-        highScore={state.highScore}
         winData={winData}
+        username={username}
+        leaderboard={leaderboard}
+        leaderboardLoading={leaderboardLoading}
+        leaderboardMode={leaderboardMode}
         onSetMode={setMode}
+        onOpenLeaderboard={() => {
+          setLeaderboardMode(state.gameMode);
+          setModalType('leaderboard');
+        }}
+        onChangeLeaderboardMode={setLeaderboardMode}
         onStartLevel={() => startLevel(1, false)}
         onNextLevel={nextLevel}
         onRetry={restartLevel}
-        onCloseOverlay={() => setModalType('none')}
+        onCloseOverlay={() => setModalType(modalType === 'leaderboard' ? 'mode' : 'none')}
         onSetTheme={(name) => dispatch({ type: 'SET_THEME', payload: name })}
       />
     </div>
   );
 }
+
