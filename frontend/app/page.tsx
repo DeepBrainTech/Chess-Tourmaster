@@ -14,7 +14,16 @@ function getHashParams(): Record<string, string> {
   return params;
 }
 
+const DEV_TOKEN = '__dev__';
+const DEV_USERNAME = 'DevUser';
+
+function isLocalDev(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+}
+
 function decodeJwt(token: string): { user_id?: number; username?: string } | null {
+  if (token === DEV_TOKEN) return { user_id: 0, username: DEV_USERNAME };
   try {
     const payload = token.split('.')[1];
     if (!payload) return null;
@@ -44,11 +53,12 @@ export default function Home() {
   useEffect(() => {
     if (!mounted) return;
     const params = getHashParams();
-    const t = params.token || null;
+    let t = params.token || null;
+    if (!t && isLocalDev()) t = DEV_TOKEN;
     setToken(t);
     if (t) {
       const payload = decodeJwt(t);
-      if (payload?.user_id && payload?.username) {
+      if (payload?.user_id !== undefined && payload?.username) {
         setUsername(payload.username);
         setIsAuthenticated(true);
       } else {

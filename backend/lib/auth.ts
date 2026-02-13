@@ -10,6 +10,9 @@ export interface TokenPayload {
   exp?: number;
 }
 
+const DEV_TOKEN = '__dev__';
+const DEV_PAYLOAD: TokenPayload = { sub: 'DevUser', user_id: 0, username: 'DevUser' };
+
 /**
  * 验证 JWT token（从主站签发的 tourmaster token）
  */
@@ -32,6 +35,7 @@ export function verifyToken(token: string): TokenPayload | null {
 
 /**
  * 从请求头中提取并验证 token
+ * 开发环境支持魔术 token __dev__ 作为写死开发账号
  */
 export function getTokenFromRequest(request: NextRequest): TokenPayload | null {
   const authHeader = request.headers.get('authorization');
@@ -41,6 +45,9 @@ export function getTokenFromRequest(request: NextRequest): TokenPayload | null {
   }
 
   const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+  if (process.env.NODE_ENV !== 'production' && token === DEV_TOKEN) {
+    return DEV_PAYLOAD;
+  }
   return verifyToken(token);
 }
 

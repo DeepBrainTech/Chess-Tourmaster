@@ -42,12 +42,13 @@ export default function GameHeader({
   const isMathTour = gameMode === 'math_tour';
 
   return (
-    <div className="z-10 w-full max-w-[95vw] lg:max-w-5xl xl:max-w-6xl px-4 lg:px-6 xl:px-8 mb-3 flex justify-between items-start">
-      <div className="min-w-0 flex-1">
+    <div className="z-10 w-full max-w-[95vw] lg:max-w-5xl xl:max-w-6xl px-4 lg:px-6 xl:px-8 mb-3 flex items-start">
+      <div className="min-w-0 flex-1" aria-hidden="true" />
+      <div className="min-w-0 flex shrink-0 flex-col items-center text-center">
         <h1 className="text-xl md:text-3xl lg:text-4xl text-rose-500 font-bold fantasy-font tracking-wider drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
           <i className="fas fa-chess-board mr-2" /> Tourmaster
         </h1>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 lg:gap-x-4 xl:gap-x-6 text-sm md:text-base lg:text-lg text-gray-300 mt-1">
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 lg:gap-x-4 xl:gap-x-6 text-sm md:text-base lg:text-lg text-gray-300 mt-1">
           <span className="font-bold text-white">
             {isMathTour ? 'Math Tour' : 'Classic Tour'}
           </span>
@@ -84,7 +85,7 @@ export default function GameHeader({
           )}
         </div>
       </div>
-      <div className="flex gap-2 lg:gap-3 xl:gap-4 pl-3 xl:pl-6">
+      <div className="min-w-0 flex-1 flex justify-end gap-2 lg:gap-3 xl:gap-4 pl-3 xl:pl-6">
         <button
           type="button"
           onClick={onRestart}
@@ -132,7 +133,7 @@ export function TilesAndScoreBar({
   gameTimeSeconds: number;
 }) {
   return (
-    <div className="z-10 w-full max-w-[95vw] lg:max-w-5xl px-4 lg:px-6 mb-3 flex flex-wrap justify-between items-center min-h-8">
+    <div className="z-10 w-full max-w-[95vw] lg:max-w-5xl px-4 lg:px-6 mb-3 flex flex-wrap justify-center items-center min-h-8">
       <div className="text-cyan-300 font-bold text-sm md:text-lg lg:text-xl flex items-center gap-3 bg-slate-900/50 px-3 lg:px-4 py-1 lg:py-1.5 rounded-full border border-slate-700">
         <span>
           Tiles Left: <span className="ml-2 text-white">{tilesLeft}</span>
