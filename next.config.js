@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  output: 'standalone', // 启用 standalone 模式，用于 Docker 部署
+  output: 'export', // 静态导出（Cloudflare Pages）
 }
 
 module.exports = nextConfig
