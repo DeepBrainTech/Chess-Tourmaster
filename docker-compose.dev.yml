@@ -1,0 +1,89 @@
+services:
+  # PostgreSQL 数据库（开发环境）
+  db:
+    image: postgres:15-alpine
+    container_name: chess-tourmaster-db-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: chess_user
+      POSTGRES_PASSWORD: dev_password_123
+      POSTGRES_DB: chess_tourmaster_dev
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"  # 使用不同端口避免冲突
+    networks:
+      - chess-network-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chess_user -d chess_tourmaster_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Next.js 应用（开发模式 - 支持热重载）
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: chess-tourmaster-app-dev
+    container_name: chess-tourmaster-app-dev
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://chess_user:dev_password_123@db:5432/chess_tourmaster_dev?schema=public
+      - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret-change-me}
+      - TOURMASTER_JWT_SECRET=${TOURMASTER_JWT_SECRET:-dev-tourmaster-secret-change-me}
+      - WATCHPACK_POLLING=true  # 启用文件监听（Docker 中需要）
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      # 挂载源代码实现热重载
+      - ./app:/app/app
+      - ./components:/app/components
+      - ./lib:/app/lib
+      - ./prisma:/app/prisma
+      - ./public:/app/public
+      - ./scripts:/app/scripts
+      - ./.env:/app/.env
+      - ./package.json:/app/package.json
+      - ./package-lock.json:/app/package-lock.json
+      - ./tsconfig.json:/app/tsconfig.json
+      - ./tailwind.config.ts:/app/tailwind.config.ts
+      - ./next.config.js:/app/next.config.js
+      - ./postcss.config.js:/app/postcss.config.js
+      # 不挂载 node_modules 和 .next，使用容器内的
+      - node_modules_dev:/app/node_modules
+      - next_cache_dev:/app/.next
+    ports:
+      - "3000:3000"  # Next.js 开发服务器
+      - "5555:5555"  # Prisma Studio
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - chess-network-dev
+    command: >
+      sh -c "
+        npm install &&
+        npx prisma generate &&
+        npx prisma db push --skip-generate &&
+        npm run dev
+      "
+    # 开发模式下增加资源限制可选
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '2.0'
+    #       memory: 2G
+
+volumes:
+  postgres_data_dev:
+    driver: local
+  node_modules_dev:
+    driver: local
+  next_cache_dev:
+    driver: local
+
+networks:
+  chess-network-dev:
+    driver: bridge

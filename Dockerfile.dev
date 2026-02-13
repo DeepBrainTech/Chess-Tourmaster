@@ -1,0 +1,11 @@
+# 开发环境 Dockerfile（Prisma 需要 OpenSSL，使用 Debian 系并显式安装）
+FROM node:18-slim
+
+# 按 Prisma 建议安装 OpenSSL，避免 schema engine 报错
+RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+EXPOSE 3000 5555
+
+CMD ["npm", "run", "dev"]
