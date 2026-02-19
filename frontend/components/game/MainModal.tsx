@@ -25,7 +25,6 @@ type Props = {
   type: ModalType;
   gameMode: 'classic' | 'math_tour';
   winData: WinData | null;
-  highScore?: number;
   username?: string;
   leaderboard: LeaderboardEntry[];
   leaderboardLoading: boolean;
@@ -54,7 +53,6 @@ export default function MainModal({
   type,
   gameMode,
   winData,
-  highScore = 0,
   username,
   leaderboard,
   leaderboardLoading,
@@ -356,10 +354,7 @@ export default function MainModal({
             <h2 className="text-3xl font-bold text-white mb-2 fantasy-font">
               Defeat
             </h2>
-            <p className="text-gray-300 mb-2">Trapped or burned!</p>
-            {isMathTour && highScore > 0 && (
-              <p className="text-amber-300 font-mono text-sm mb-3">HIGH SCORE: {highScore.toLocaleString()}</p>
-            )}
+            <p className="text-gray-300 mb-4">Trapped or burned!</p>
             <button
               type="button"
               onClick={onRetry}

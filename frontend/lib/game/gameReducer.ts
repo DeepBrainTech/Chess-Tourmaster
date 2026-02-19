@@ -9,7 +9,6 @@ export type GameAction =
   | { type: 'MOVE'; payload: { r: number; c: number } }
   | { type: 'SET_GAME_TIME'; payload: number }
   | { type: 'SET_THEME'; payload: ThemeName }
-  | { type: 'LOAD_HIGH_SCORE'; payload: number }
   | { type: 'SET_MAX_UNLOCKED_LEVEL'; payload: number }
   | { type: 'SET_LEVEL_STARS'; payload: Record<number, number> }
   | { type: 'UPSERT_LEVEL_STAR'; payload: { level: number; stars: number } }
@@ -40,7 +39,6 @@ export const initialGameState: GameState = {
   savedGridConfig: null,
   currentRunScore: 0,
   cumulativeBaseScore: 0,
-  highScore: 0,
   streak: 0,
   gameStartTime: 0,
   gameTimeSeconds: 0,
@@ -155,9 +153,6 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'SET_THEME':
       return { ...state, theme: THEME_CLASSES[action.payload] };
 
-    case 'LOAD_HIGH_SCORE':
-      return { ...state, highScore: action.payload };
-
     case 'SET_MAX_UNLOCKED_LEVEL':
       return { ...state, maxUnlockedLevel: action.payload };
 
@@ -181,14 +176,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const newCumulative = state.cumulativeBaseScore + levelBonus;
       const newStreak = state.streak + 1;
       const newRunScore = state.currentRunScore + levelBonus + streakBonus;
-      const isNewHigh = newCumulative > state.highScore;
       return {
         ...state,
         isPlaying: false,
         currentRunScore: newRunScore,
         cumulativeBaseScore: newCumulative,
         streak: newStreak,
-        highScore: isNewHigh ? newCumulative : state.highScore,
       };
     }
 

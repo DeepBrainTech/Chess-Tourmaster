@@ -89,9 +89,6 @@ export default function GamePage({ token, username }: Props) {
       ]);
 
       const progressData = await progressRes.json();
-      if (progressData.success && progressData.data?.high_score != null) {
-        dispatch({ type: 'LOAD_HIGH_SCORE', payload: progressData.data.high_score });
-      }
       if (progressData.success && progressData.data?.total_levels != null) {
         dispatch({
           type: 'SET_MAX_UNLOCKED_LEVEL',
@@ -127,7 +124,6 @@ export default function GamePage({ token, username }: Props) {
 
   const saveProgress = useCallback(
     async (
-      highScore: number,
       maxUnlockedLevel: number,
       levelData?: { level: number; moves_count: number; time_seconds: number; score: number; stars: number; game_mode: 'classic' | 'math_tour' }
     ) => {
@@ -140,7 +136,6 @@ export default function GamePage({ token, username }: Props) {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            high_score: highScore,
             total_levels: maxUnlockedLevel,
             level_data: levelData,
           }),
@@ -316,11 +311,9 @@ export default function GamePage({ token, username }: Props) {
     }
     const levelBonus = Math.floor(Math.random() * 501) + 500;
     const streakBonus = state.streak * 100;
-    const newCumulative = state.cumulativeBaseScore + levelBonus;
-    const newHighScore = Math.max(state.highScore, newCumulative);
     const nextUnlockedLevel = Math.min(MAX_LEVELS, Math.max(state.maxUnlockedLevel, state.level + 1));
     const runScoreAfterWin = state.currentRunScore + levelBonus + streakBonus;
-    await saveProgress(newHighScore, nextUnlockedLevel, {
+    await saveProgress(nextUnlockedLevel, {
       level: state.level,
       moves_count: state.history.length,
       time_seconds: state.gameTimeSeconds,
@@ -342,8 +335,6 @@ export default function GamePage({ token, username }: Props) {
       levelBonus,
       streakBonus,
       totalScore: runScoreAfterWin,
-      isNewHighScore: newCumulative > state.highScore,
-      baseScore: newCumulative,
     });
     setHintTarget(null);
     setModalType('win');
@@ -532,7 +523,6 @@ export default function GamePage({ token, username }: Props) {
         type={modalType}
         gameMode={state.gameMode}
         winData={winData}
-        highScore={state.highScore}
         username={username}
         leaderboard={leaderboard}
         leaderboardLoading={leaderboardLoading}

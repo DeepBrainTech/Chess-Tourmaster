@@ -25,7 +25,7 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
             game_mode: gameMode,
           },
         },
-        select: { max_unlocked_level: true, high_score: true },
+        select: { max_unlocked_level: true },
       });
 
       let modeUnlockedLevel = 1;
@@ -43,14 +43,11 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
         modeUnlockedLevel = Math.max(1, Math.min(100, maxCompleted + 1));
       }
 
-      const highScore = modeProgress?.high_score != null ? Math.max(0, Math.floor(modeProgress.high_score)) : 0;
-
       return jsonResponse(
         {
           success: true,
           message: 'Progress loaded successfully',
           data: {
-            high_score: highScore,
             total_levels: modeUnlockedLevel,
             best_moves: null,
             total_moves: 0,
@@ -72,7 +69,6 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
         success: true,
         message: 'Progress loaded successfully',
         data: {
-          high_score: 0,
           total_levels: Math.max(1, maxUnlocked._max.max_unlocked_level ?? 1),
           best_moves: null,
           total_moves: 0,

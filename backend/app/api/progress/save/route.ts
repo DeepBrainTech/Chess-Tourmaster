@@ -8,7 +8,6 @@ import { addHintCount, ensureUserHint } from '@/lib/userHint';
  * Save mode progress and per-level record.
  * POST /api/progress/save
  * Body: {
- *   high_score?: number,
  *   total_levels?: number,
  *   level_data?: { level, moves_count, time_seconds, stars, score, game_mode }
  * }
@@ -17,7 +16,7 @@ export const POST = requireAuth(async (request: NextRequest, payload) => {
   const origin = request.headers.get('Origin');
   try {
     const body = await request.json();
-    const { total_levels, level_data, high_score: bodyHighScore } = body;
+    const { total_levels, level_data } = body;
 
     let modeUnlockedLevel =
       typeof total_levels === 'number' ? Math.max(1, Math.min(100, Math.floor(total_levels))) : 1;
@@ -37,18 +36,10 @@ export const POST = requireAuth(async (request: NextRequest, payload) => {
             game_mode: mode,
           },
         },
-        select: { max_unlocked_level: true, high_score: true },
+        select: { max_unlocked_level: true },
       });
       const prevUnlockedLevel = existingModeProgress?.max_unlocked_level ?? 1;
       const shouldGrantHint = modeUnlockedLevel > prevUnlockedLevel;
-      const newHighScore =
-        typeof bodyHighScore === 'number' && !Number.isNaN(bodyHighScore)
-          ? Math.max(0, Math.floor(bodyHighScore))
-          : existingModeProgress?.high_score ?? 0;
-      const highScoreToStore =
-        existingModeProgress?.high_score != null
-          ? Math.max(existingModeProgress.high_score, newHighScore)
-          : newHighScore;
 
       await prisma.levelRecord.create({
         data: {
@@ -72,7 +63,6 @@ export const POST = requireAuth(async (request: NextRequest, payload) => {
         update: {
           username: payload.username,
           max_unlocked_level: Math.max(existingModeProgress?.max_unlocked_level ?? 1, modeUnlockedLevel),
-          high_score: highScoreToStore,
           updated_at: new Date(),
         },
         create: {
@@ -80,7 +70,6 @@ export const POST = requireAuth(async (request: NextRequest, payload) => {
           username: payload.username,
           game_mode: mode,
           max_unlocked_level: modeUnlockedLevel,
-          high_score: highScoreToStore,
         },
       });
 
@@ -90,24 +79,11 @@ export const POST = requireAuth(async (request: NextRequest, payload) => {
       }
     }
 
-    let savedHighScore = 0;
-    if (level_data && typeof level_data === 'object') {
-      const mode = level_data.game_mode === 'math_tour' ? 'math_tour' : 'classic';
-      const mp = await prisma.modeProgress.findUnique({
-        where: {
-          portal_user_id_game_mode: { portal_user_id: payload.user_id, game_mode: mode },
-        },
-        select: { high_score: true },
-      });
-      savedHighScore = mp?.high_score ?? 0;
-    }
-
     return jsonResponse(
       {
         success: true,
         message: 'Progress saved successfully',
         data: {
-          high_score: savedHighScore,
           total_levels: modeUnlockedLevel,
           best_moves: null,
           total_moves: 0,

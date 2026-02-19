@@ -50,7 +50,6 @@ export interface GameState {
   savedGridConfig: LevelConfig | null;
   currentRunScore: number;
   cumulativeBaseScore: number;
-  highScore: number;
   streak: number;
   gameStartTime: number;
   gameTimeSeconds: number;
