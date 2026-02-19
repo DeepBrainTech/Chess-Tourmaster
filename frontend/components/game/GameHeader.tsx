@@ -128,12 +128,20 @@ export default function GameHeader({
 export function TilesAndScoreBar({
   tilesLeft,
   gameTimeSeconds,
+  gameMode,
+  currentScore,
+  requiredScore,
 }: {
   tilesLeft: number;
   gameTimeSeconds: number;
+  gameMode?: 'classic' | 'math_tour';
+  currentScore?: number;
+  requiredScore?: number;
 }) {
+  const isMathTour = gameMode === 'math_tour';
+  const hasEnoughScore = isMathTour && requiredScore != null && currentScore != null && currentScore >= requiredScore;
   return (
-    <div className="z-10 w-full max-w-[95vw] lg:max-w-5xl px-4 lg:px-6 mb-3 flex flex-wrap justify-center items-center min-h-8">
+    <div className="z-10 w-full max-w-[95vw] lg:max-w-5xl px-4 lg:px-6 mb-3 flex flex-wrap justify-center items-center gap-3 min-h-8">
       <div className="text-cyan-300 font-bold text-sm md:text-lg lg:text-xl flex items-center gap-3 bg-slate-900/50 px-3 lg:px-4 py-1 lg:py-1.5 rounded-full border border-slate-700">
         <span>
           Tiles Left: <span className="ml-2 text-white">{tilesLeft}</span>
@@ -144,6 +152,15 @@ export function TilesAndScoreBar({
           {formatTime(gameTimeSeconds)}
         </span>
       </div>
+      {isMathTour && requiredScore != null && (
+        <div
+          className={`font-bold text-sm md:text-lg lg:text-xl flex items-center bg-slate-900/50 px-3 lg:px-4 py-1 lg:py-1.5 rounded-full border border-slate-700 ${hasEnoughScore ? 'text-lime-400' : 'text-amber-300'}`}
+        >
+          Score: <span className="ml-1 text-white">{currentScore ?? 0}</span>
+          <span className="mx-1 text-slate-500">/</span>
+          <span className="text-white">{requiredScore}</span>
+        </div>
+      )}
     </div>
   );
 }

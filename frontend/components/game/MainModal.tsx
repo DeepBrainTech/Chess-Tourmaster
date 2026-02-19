@@ -7,6 +7,11 @@ type WinData = {
   time: string;
   stars: number;
   isFinalLevel: boolean;
+  levelBonus?: number;
+  streakBonus?: number;
+  totalScore?: number;
+  isNewHighScore?: boolean;
+  baseScore?: number;
 };
 
 type LeaderboardEntry = {
@@ -20,6 +25,7 @@ type Props = {
   type: ModalType;
   gameMode: 'classic' | 'math_tour';
   winData: WinData | null;
+  highScore?: number;
   username?: string;
   leaderboard: LeaderboardEntry[];
   leaderboardLoading: boolean;
@@ -48,6 +54,7 @@ export default function MainModal({
   type,
   gameMode,
   winData,
+  highScore = 0,
   username,
   leaderboard,
   leaderboardLoading,
@@ -120,16 +127,20 @@ export default function MainModal({
             {isMathTour && (
               <li className="flex items-start">
                 <i className="fas fa-plus w-6 text-amber-400 mt-1" />
-                <span><strong>Tour:</strong> Different map pool from Classic mode.</span>
+                <span><strong>Gather:</strong> Collect tile points to meet score requirement for King capture.</span>
               </li>
             )}
             <li className="flex items-start">
               <i className="fas fa-fire w-6 text-orange-500 mt-1" />
-              <span><strong>Fire:</strong> 3s to move or burn!</span>
+              <span><strong>Fire:</strong> {isMathTour ? '3s to move or burn! Landing on fire grants x2 score on the next move.' : '3s to move or burn!'}</span>
             </li>
             <li className="flex items-start">
               <i className="fas fa-chess-king w-6 text-rose-500 mt-1" />
-              <span><strong>Win:</strong> Clear board to capture King.</span>
+              <span><strong>Win:</strong> {isMathTour ? 'Meet score requirement to capture King.' : 'Clear board to capture King.'}</span>
+            </li>
+            <li className="flex items-start">
+              <i className="fas fa-star w-6 text-yellow-400 mt-1" />
+              <span><strong>Stars:</strong> {isMathTour ? 'By score (≥110% = 3★, ≥105% = 2★).' : 'By time (faster = more stars).'}</span>
             </li>
           </ul>
           <button
@@ -270,9 +281,27 @@ export default function MainModal({
             <h2 className="text-3xl font-bold text-white mb-2 fantasy-font">
               {isMathTour ? 'Math Tour' : 'Classic Tour'}
             </h2>
-            <p className="text-gray-300 mb-4 text-sm">
-              Clear every tile and capture the King.
-            </p>
+            <div className="text-gray-300 mb-4 text-sm text-left space-y-2">
+              {isMathTour ? (
+                <>
+                  <p className="font-medium text-amber-200/90">Math Tour Rules</p>
+                  <ul className="list-disc list-inside space-y-1 text-gray-400">
+                    <li>Knight moves in L-shape; land on tiles to collect score (2–5 per tile)</li>
+                    <li>Landing on fire doubles the score on your next move</li>
+                    <li>Reach the target score to capture the King; stars depend on score ratio</li>
+                  </ul>
+                </>
+              ) : (
+                <>
+                  <p className="font-medium text-cyan-200/90">Classic Tour Rules</p>
+                  <ul className="list-disc list-inside space-y-1 text-gray-400">
+                    <li>Knight moves in L-shape; clear every reachable tile</li>
+                    <li>Leave fire tiles within 3 seconds or you lose</li>
+                    <li>Capture the King after clearing the board; stars depend on time</li>
+                  </ul>
+                </>
+              )}
+            </div>
             <button
               type="button"
               onClick={onStartLevel}
@@ -306,7 +335,7 @@ export default function MainModal({
             <p className="text-gray-300 mb-1">
               {winData.isFinalLevel ? 'Level 100 Complete - All Levels Cleared!' : `Level ${winData.level} Complete`}
             </p>
-            <p className="text-xl font-bold text-cyan-400 mb-4">
+            <p className="text-xl font-bold text-cyan-400 mb-2">
               Time: {winData.time}
             </p>
             <button
@@ -327,7 +356,10 @@ export default function MainModal({
             <h2 className="text-3xl font-bold text-white mb-2 fantasy-font">
               Defeat
             </h2>
-            <p className="text-gray-300 mb-4">Trapped or burned!</p>
+            <p className="text-gray-300 mb-2">Trapped or burned!</p>
+            {isMathTour && highScore > 0 && (
+              <p className="text-amber-300 font-mono text-sm mb-3">HIGH SCORE: {highScore.toLocaleString()}</p>
+            )}
             <button
               type="button"
               onClick={onRetry}

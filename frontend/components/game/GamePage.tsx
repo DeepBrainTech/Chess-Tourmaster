@@ -29,6 +29,11 @@ type WinData = {
   time: string;
   stars: number;
   isFinalLevel: boolean;
+  levelBonus?: number;
+  streakBonus?: number;
+  totalScore?: number;
+  isNewHighScore?: boolean;
+  baseScore?: number;
 };
 
 function formatTime(seconds: number): string {
@@ -69,6 +74,7 @@ export default function GamePage({ token, username }: Props) {
   const [shake, setShake] = useState(false);
   const fireStartRef = useRef<number>(0);
   const lastSpokenSecondRef = useRef<number>(4);
+  const wonByCaptureRef = useRef(false);
 
   const loadProgress = useCallback(async (mode: 'classic' | 'math_tour') => {
     if (!token) return null;
@@ -233,6 +239,20 @@ export default function GamePage({ token, username }: Props) {
     }
   }, [state.isPlaying, state.grid, state.knightPos, state.tilesLeft, state.history.length]);
 
+  // Win by capture: knight moved to King (reducer set isPlaying=false), trigger win modal
+  useEffect(() => {
+    if (
+      !state.isPlaying &&
+      state.grid.length > 0 &&
+      state.knightPos.r === state.kingPos.r &&
+      state.knightPos.c === state.kingPos.c &&
+      !wonByCaptureRef.current
+    ) {
+      wonByCaptureRef.current = true;
+      void handleWin();
+    }
+  }, [state.isPlaying, state.knightPos.r, state.knightPos.c, state.kingPos.r, state.kingPos.c, state.grid.length]);
+
   const handleMove = useCallback(
     (r: number, c: number) => {
       setHintTarget(null);
@@ -240,16 +260,25 @@ export default function GamePage({ token, username }: Props) {
       if (!tile || tile.type === 'void' || tile.visited) return;
       if (tile.type === 'king') {
         if (!canMoveToKing(state)) {
-          setMessage({
-            text: 'Clear all tiles first!',
-            className: 'text-rose-400',
-          });
+          const text =
+            state.gameMode === 'math_tour'
+              ? `Need ${Math.max(0, state.requiredScore - state.currentScore)} more score!`
+              : 'Clear all tiles first!';
+          setMessage({ text, className: 'text-rose-400' });
           setTimeout(() => setMessage(null), 1500);
           setShake(true);
           setTimeout(() => setShake(false), 500);
           return;
         }
-        void handleWin();
+        const dr = Math.abs(state.knightPos.r - r);
+        const dc = Math.abs(state.knightPos.c - c);
+        if (!((dr === 2 && dc === 1) || (dr === 1 && dc === 2))) {
+          setShake(true);
+          setTimeout(() => setShake(false), 500);
+          return;
+        }
+        dispatch({ type: 'MOVE', payload: { r, c } });
+        playMove();
         return;
       }
       const dr = Math.abs(state.knightPos.r - r);
@@ -261,6 +290,10 @@ export default function GamePage({ token, username }: Props) {
       }
       dispatch({ type: 'MOVE', payload: { r, c } });
       playMove();
+      if (state.gameMode === 'math_tour' && tile.hasFire) {
+        setMessage({ text: 'x2 Score Multiplier Active!', className: 'text-orange-400' });
+        setTimeout(() => setMessage(null), 1500);
+      }
     },
     [state]
   );
@@ -268,30 +301,49 @@ export default function GamePage({ token, username }: Props) {
   async function handleWin() {
     playVictory();
     const elapsed = (Date.now() - state.gameStartTime) / 1000;
-    let stars = 1;
-    if (elapsed <= state.parTime) stars = 3;
-    else if (elapsed <= state.parTime * 1.5) stars = 2;
+    let stars: number;
+    if (state.gameMode === 'math_tour') {
+      const r = state.requiredScore;
+      const s = state.currentScore;
+      if (r <= 0) stars = 3;
+      else if (s >= r * 1.1) stars = 3;
+      else if (s >= r * 1.05) stars = 2;
+      else stars = 1;
+    } else {
+      stars = 1;
+      if (elapsed <= state.parTime) stars = 3;
+      else if (elapsed <= state.parTime * 1.5) stars = 2;
+    }
+    const levelBonus = Math.floor(Math.random() * 501) + 500;
+    const streakBonus = state.streak * 100;
+    const newCumulative = state.cumulativeBaseScore + levelBonus;
+    const newHighScore = Math.max(state.highScore, newCumulative);
     const nextUnlockedLevel = Math.min(MAX_LEVELS, Math.max(state.maxUnlockedLevel, state.level + 1));
-    await saveProgress(state.highScore, nextUnlockedLevel, {
+    const runScoreAfterWin = state.currentRunScore + levelBonus + streakBonus;
+    await saveProgress(newHighScore, nextUnlockedLevel, {
       level: state.level,
       moves_count: state.history.length,
       time_seconds: state.gameTimeSeconds,
-      score: 0,
+      score: runScoreAfterWin,
       stars,
       game_mode: state.gameMode,
     });
     dispatch({ type: 'SET_MAX_UNLOCKED_LEVEL', payload: nextUnlockedLevel });
     dispatch({ type: 'UPSERT_LEVEL_STAR', payload: { level: state.level, stars } });
-
     dispatch({
       type: 'WIN_LEVEL',
-      payload: { levelBonus: 0, streakBonus: 0 },
+      payload: { levelBonus, streakBonus },
     });
     setWinData({
       level: state.level,
       time: formatTime(state.gameTimeSeconds),
       stars,
       isFinalLevel: state.level >= MAX_LEVELS,
+      levelBonus,
+      streakBonus,
+      totalScore: runScoreAfterWin,
+      isNewHighScore: newCumulative > state.highScore,
+      baseScore: newCumulative,
     });
     setHintTarget(null);
     setModalType('win');
@@ -300,6 +352,7 @@ export default function GamePage({ token, username }: Props) {
   const startLevel = useCallback(
     (level: number, useSaved: boolean) => {
       initSound();
+      wonByCaptureRef.current = false;
       if (level === 1) {
         dispatch({ type: 'RESET_RUN' });
       }
@@ -448,6 +501,9 @@ export default function GamePage({ token, username }: Props) {
           <TilesAndScoreBar
             tilesLeft={state.tilesLeft}
             gameTimeSeconds={state.gameTimeSeconds}
+            gameMode={state.gameMode}
+            currentScore={state.currentScore}
+            requiredScore={state.requiredScore}
           />
           <Board state={state} onMove={handleMove} shake={shake} hintTarget={hintTarget} />
           {message && (
@@ -466,9 +522,9 @@ export default function GamePage({ token, username }: Props) {
         <p>
           Goal:{' '}
           {state.gameMode === 'math_tour'
-            ? 'Clear board → Capture King'
-            : 'Clear board → Capture King'}
-          <span className="text-rose-500 font-bold"> King</span>
+            ? 'Collect score → Capture '
+            : 'Clear board → Capture '}
+          <span className="text-rose-500 font-bold">King</span>
         </p>
       </div>
 
@@ -476,6 +532,7 @@ export default function GamePage({ token, username }: Props) {
         type={modalType}
         gameMode={state.gameMode}
         winData={winData}
+        highScore={state.highScore}
         username={username}
         leaderboard={leaderboard}
         leaderboardLoading={leaderboardLoading}

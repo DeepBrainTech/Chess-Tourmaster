@@ -8,6 +8,8 @@ type Props = {
   isValidMove: boolean;
   isHintTarget: boolean;
   onClick: () => void;
+  showQuestValue?: boolean;
+  scoreMultiplier?: number;
 };
 
 export default function Tile({
@@ -16,6 +18,8 @@ export default function Tile({
   isValidMove,
   isHintTarget,
   onClick,
+  showQuestValue = false,
+  scoreMultiplier = 1,
 }: Props) {
   const isVoid = tile.type === 'void';
   const isKing = tile.type === 'king';
@@ -53,6 +57,11 @@ export default function Tile({
         }
       }}
     >
+      {showQuestValue && ((tile.tileMultiplier ?? 1) > 1 || (tile.value ?? 0) !== 0) && (
+        <span className={`quest-value absolute top-1 right-2 font-bold text-xs sm:text-sm drop-shadow-md ${(tile.tileMultiplier ?? 1) > 1 ? 'text-lime-400' : (tile.value ?? 0) < 0 ? 'text-rose-400' : 'text-amber-300'}`}>
+          {(tile.tileMultiplier ?? 1) > 1 ? `x${tile.tileMultiplier}` : `${(tile.value ?? 0) >= 0 ? '+' : ''}${tile.value}`}
+        </span>
+      )}
       {tile.hasFire && (
         <i className="fas fa-fire text-2xl sm:text-3xl text-orange-500 fire-anim opacity-90" />
       )}

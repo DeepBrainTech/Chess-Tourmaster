@@ -7,6 +7,8 @@ export interface TileData {
   r: number;
   c: number;
   value: number;
+  /** Math Tour: 1, 2, or 3 — score for this tile is value * tileMultiplier * fireMultiplier */
+  tileMultiplier?: number;
 }
 
 export interface LevelConfig {

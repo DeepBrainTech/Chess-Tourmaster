@@ -96,15 +96,34 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const isMathTour = state.gameMode === 'math_tour';
       if (targetTile.type === 'void' || targetTile.visited) return state;
       if (targetTile.type === 'king') {
-        const hasCleared = state.tilesLeft === 0;
-        if (!hasCleared) return state;
-        return state;
+        if (!canMoveToKing(state)) return state;
+        const entry: HistoryEntry = {
+          knightPos: { ...curr },
+          prevPos: { r, c },
+          scoreCollected: 0,
+          valueRestored: 0,
+          multiplierUsed: state.scoreMultiplier,
+        };
+        return {
+          ...state,
+          knightPos: { r, c },
+          history: [...state.history, entry],
+          isPlaying: false,
+        };
       }
 
-      const collectedValue = targetTile.value;
+      const collectedValue = targetTile.value ?? 0;
+      const tileMult = targetTile.tileMultiplier ?? 1;
       const multiplierUsed = state.scoreMultiplier;
-      const finalScore = 0;
-      const multiplierAfterMove = 1;
+      let finalScore = 0;
+      if (isMathTour) {
+        if (tileMult > 1) {
+          finalScore = state.currentScore * (tileMult - 1);
+        } else {
+          finalScore = collectedValue * multiplierUsed;
+        }
+      }
+      const multiplierAfterMove = isMathTour && targetTile.hasFire ? 2 : 1;
 
       const newGrid = deepCopyGrid(state.grid);
       const newTile = { ...newGrid[r][c], visited: true };
@@ -206,8 +225,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 }
 
 export function canMoveToKing(state: GameState): boolean {
-  const tilesCleared = state.tilesLeft === 0;
-  return tilesCleared;
+  if (state.gameMode === 'math_tour') {
+    return state.currentScore >= state.requiredScore;
+  }
+  return state.tilesLeft === 0;
 }
 
 export function isValidMove(state: GameState, r: number, c: number): boolean {
