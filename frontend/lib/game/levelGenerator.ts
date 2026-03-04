@@ -1,5 +1,17 @@
 import type { GameMode } from './types';
 import type { LevelConfig, TileData } from './types';
+import { MATH_PIECE_CONFIG, type MathPiece } from './types';
+
+const MATH_PIECES: MathPiece[] = ['pawn', 'knight', 'bishop', 'rook', 'queen'];
+/** 权重: pawn 多, queen 少，保证 requiredScore 可达成 */
+function pickRandomMathPiece(rng: () => number): MathPiece {
+  const roll = rng();
+  if (roll < 0.35) return 'pawn';
+  if (roll < 0.58) return 'knight';
+  if (roll < 0.76) return 'bishop';
+  if (roll < 0.90) return 'rook';
+  return 'queen';
+}
 
 function hashString(input: string): number {
   let hash = 2166136261;
@@ -79,18 +91,21 @@ export function generateLevelConfig(levelNum: number, gameMode: GameMode): Level
         let value = 0;
         let hasFire = false;
         let tileMultiplier: number | undefined;
-        if (!isKing) {
-          if (!isStart) {
-            tilesToVisit++;
-            if (rng() < 0.2) value = -(Math.floor(rng() * 3) + 1);
-            else value = Math.floor(rng() * 4) + 2;
-            if (rng() < 0.12) tileMultiplier = 2;
-            else if (rng() < 0.04) tileMultiplier = 3;
-            maxPossibleBaseScore += value * (tileMultiplier ?? 1);
-            if (rng() < fireChance) hasFire = true;
+        let piece: MathPiece | undefined;
+        if (!isKing && !isStart) {
+          tilesToVisit++;
+          if (rng() < fireChance) {
+            hasFire = true;
+            tileMultiplier = 3;
+          } else {
+            piece = pickRandomMathPiece(rng);
+            const cfg = MATH_PIECE_CONFIG[piece];
+            value = cfg.value;
+            tileMultiplier = cfg.tileMultiplier;
+            maxPossibleBaseScore += value * tileMultiplier;
           }
         }
-        resultGrid[r][c] = { type, hasFire, visited: isStart, r, c, value, tileMultiplier };
+        resultGrid[r][c] = { type, hasFire, visited: isStart, r, c, value, tileMultiplier, piece };
       }
     }
     resultGrid[kr][kc].type = 'king';

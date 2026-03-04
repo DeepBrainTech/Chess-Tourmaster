@@ -130,7 +130,7 @@ export default function MainModal({
             )}
             <li className="flex items-start">
               <i className="fas fa-fire w-6 text-orange-500 mt-1" />
-              <span><strong>Fire:</strong> {isMathTour ? '3s to move or burn! Landing on fire grants x2 score on the next move.' : '3s to move or burn!'}</span>
+              <span><strong>Fire:</strong> {isMathTour ? '3s to move or burn! Fire tile = x3 score when you land on it (no piece on fire).' : '3s to move or burn!'}</span>
             </li>
             <li className="flex items-start">
               <i className="fas fa-chess-king w-6 text-rose-500 mt-1" />
@@ -285,7 +285,7 @@ export default function MainModal({
                   <p className="font-medium text-amber-200/90">Math Tour Rules</p>
                   <ul className="list-disc list-inside space-y-1 text-gray-400">
                     <li>Knight moves in L-shape; land on tiles to collect score (2–5 per tile)</li>
-                    <li>Landing on fire doubles the score on your next move</li>
+                    <li>Fire tile multiplies your score by 3 when you land on it; leave within 3s</li>
                     <li>Reach the target score to capture the King; stars depend on score ratio</li>
                   </ul>
                 </>

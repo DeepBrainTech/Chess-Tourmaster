@@ -1,5 +1,19 @@
 export type GameMode = 'classic' | 'math_tour';
 
+/** Math Tour 格子上的棋子，用于显示与分数对应 */
+export type MathPiece = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen';
+
+export const MATH_PIECE_CONFIG: Record<
+  MathPiece,
+  { value: number; tileMultiplier: number }
+> = {
+  pawn: { value: 1, tileMultiplier: 1 },
+  knight: { value: 3, tileMultiplier: 1 },
+  bishop: { value: -3, tileMultiplier: 1 },
+  rook: { value: 5, tileMultiplier: 1 },
+  queen: { value: 0, tileMultiplier: 2 },
+};
+
 export interface TileData {
   type: 'empty' | 'void' | 'king';
   hasFire: boolean;
@@ -9,6 +23,8 @@ export interface TileData {
   value: number;
   /** Math Tour: 1, 2, or 3 — score for this tile is value * tileMultiplier * fireMultiplier */
   tileMultiplier?: number;
+  /** Math Tour: 格子显示的棋子，分数由 MATH_PIECE_CONFIG 决定 */
+  piece?: MathPiece;
 }
 
 export interface LevelConfig {
@@ -29,6 +45,8 @@ export interface HistoryEntry {
   scoreCollected: number;
   valueRestored: number;
   multiplierUsed: number;
+  /** Math Tour: 格子乘数 2/3 表示 x2/x3，1 表示加减格 */
+  tileMultiplier?: number;
 }
 
 export interface GameState {

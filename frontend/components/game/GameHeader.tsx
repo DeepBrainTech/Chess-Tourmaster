@@ -1,6 +1,18 @@
 'use client';
 
 import { MAX_LEVELS } from '@/lib/game/levelCatalog';
+import type { HistoryEntry } from '@/lib/game/types';
+
+function formatPathExpression(history: HistoryEntry[]): string {
+  return history
+    .filter((e) => (e.tileMultiplier ?? 1) > 1 || (e.valueRestored ?? 0) !== 0)
+    .map((e) =>
+      (e.tileMultiplier ?? 1) > 1
+        ? `x${e.tileMultiplier}`
+        : `${(e.valueRestored ?? 0) >= 0 ? '+' : ''}${e.valueRestored ?? 0}`
+    )
+    .join(' ');
+}
 
 type Props = {
   gameMode: 'classic' | 'math_tour';
@@ -131,34 +143,49 @@ export function TilesAndScoreBar({
   gameMode,
   currentScore,
   requiredScore,
+  history = [],
 }: {
   tilesLeft: number;
   gameTimeSeconds: number;
   gameMode?: 'classic' | 'math_tour';
   currentScore?: number;
   requiredScore?: number;
+  history?: HistoryEntry[];
 }) {
   const isMathTour = gameMode === 'math_tour';
   const hasEnoughScore = isMathTour && requiredScore != null && currentScore != null && currentScore >= requiredScore;
+  const pathExpression = isMathTour ? formatPathExpression(history) : '';
   return (
-    <div className="z-10 w-full max-w-[95vw] lg:max-w-5xl px-4 lg:px-6 mb-3 flex flex-wrap justify-center items-center gap-3 min-h-8">
-      <div className="text-cyan-300 font-bold text-sm md:text-lg lg:text-xl flex items-center gap-3 bg-slate-900/50 px-3 lg:px-4 py-1 lg:py-1.5 rounded-full border border-slate-700">
-        <span>
-          Tiles Left: <span className="ml-2 text-white">{tilesLeft}</span>
-        </span>
-        <span className="text-slate-500">|</span>
-        <span className="font-mono">
-          <i className="far fa-clock mr-1" />
-          {formatTime(gameTimeSeconds)}
-        </span>
+    <div className="z-10 w-full max-w-[95vw] lg:max-w-5xl px-4 lg:px-6 mb-1 flex flex-col items-center gap-1">
+      <div className="flex flex-wrap justify-center items-center gap-3 min-h-8">
+        <div className="text-cyan-300 font-bold text-sm md:text-lg lg:text-xl flex items-center gap-3 bg-slate-900/50 px-3 lg:px-4 py-1 lg:py-1.5 rounded-full border border-slate-700">
+          <span>
+            Tiles Left: <span className="ml-2 text-white">{tilesLeft}</span>
+          </span>
+          <span className="text-slate-500">|</span>
+          <span className="font-mono">
+            <i className="far fa-clock mr-1" />
+            {formatTime(gameTimeSeconds)}
+          </span>
+        </div>
+        {isMathTour && requiredScore != null && (
+          <div
+            className={`font-bold text-sm md:text-lg lg:text-xl flex items-center bg-slate-900/50 px-3 lg:px-4 py-1 lg:py-1.5 rounded-full border border-slate-700 ${hasEnoughScore ? 'text-lime-400' : 'text-amber-300'}`}
+          >
+            Score: <span className="ml-1 text-white">{currentScore ?? 0}</span>
+            <span className="mx-1 text-slate-500">/</span>
+            <span className="text-white">{requiredScore}</span>
+          </div>
+        )}
       </div>
-      {isMathTour && requiredScore != null && (
-        <div
-          className={`font-bold text-sm md:text-lg lg:text-xl flex items-center bg-slate-900/50 px-3 lg:px-4 py-1 lg:py-1.5 rounded-full border border-slate-700 ${hasEnoughScore ? 'text-lime-400' : 'text-amber-300'}`}
-        >
-          Score: <span className="ml-1 text-white">{currentScore ?? 0}</span>
-          <span className="mx-1 text-slate-500">/</span>
-          <span className="text-white">{requiredScore}</span>
+      {isMathTour && (
+        <div className="w-full flex justify-center">
+          <div className="text-gray-400 font-medium text-sm md:text-base bg-slate-900/50 px-3 lg:px-4 py-1.5 rounded-lg border border-slate-700 min-h-[2rem] flex items-center justify-center">
+            <span className="text-slate-500 mr-2">Expression:</span>
+            <span className="text-amber-200 font-mono">
+              {pathExpression || '—'}
+            </span>
+          </div>
         </div>
       )}
     </div>

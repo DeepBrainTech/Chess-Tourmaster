@@ -286,7 +286,7 @@ export default function GamePage({ token, username }: Props) {
       dispatch({ type: 'MOVE', payload: { r, c } });
       playMove();
       if (state.gameMode === 'math_tour' && tile.hasFire) {
-        setMessage({ text: 'x2 Score Multiplier Active!', className: 'text-orange-400' });
+        setMessage({ text: 'Fire: Score x3!', className: 'text-orange-400' });
         setTimeout(() => setMessage(null), 1500);
       }
     },
@@ -495,6 +495,7 @@ export default function GamePage({ token, username }: Props) {
             gameMode={state.gameMode}
             currentScore={state.currentScore}
             requiredScore={state.requiredScore}
+            history={state.history}
           />
           <Board state={state} onMove={handleMove} shake={shake} hintTarget={hintTarget} />
           {message && (

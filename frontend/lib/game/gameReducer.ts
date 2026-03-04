@@ -121,7 +121,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           finalScore = collectedValue * multiplierUsed;
         }
       }
-      const multiplierAfterMove = isMathTour && targetTile.hasFire ? 2 : 1;
+      const multiplierAfterMove = 1;
 
       const newGrid = deepCopyGrid(state.grid);
       const newTile = { ...newGrid[r][c], visited: true };
@@ -134,6 +134,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         scoreCollected: finalScore,
         valueRestored: collectedValue,
         multiplierUsed,
+        tileMultiplier: targetTile.tileMultiplier ?? 1,
       };
 
       return {
