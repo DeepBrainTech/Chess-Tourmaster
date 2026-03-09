@@ -91,7 +91,7 @@ export default function Home() {
           <h1 className="text-2xl font-bold mb-3">Login Required</h1>
           <p className="text-slate-300 mb-6">Please login to start playing Chess Tourmaster.</p>
           <a
-            href="https://game.deepbraintechnology.com"
+            href="https://deepbraintechnology.com"
             className="inline-flex items-center justify-center w-full rounded-xl bg-cyan-600 hover:bg-cyan-500 px-4 py-3 font-semibold transition"
           >
             Login
