@@ -7,7 +7,7 @@ export async function ensureUserHint(portalUserId: number, username: string) {
     create: {
       portal_user_id: portalUserId,
       username,
-      hint_count: 1,
+      hint_count: 0,
     },
     select: { hint_count: true },
   });

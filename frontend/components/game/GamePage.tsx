@@ -472,38 +472,6 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     [state.level, state.maxUnlockedLevel, startLevel]
   );
 
-  const consumePortalHint = useCallback(
-    async (base: string) => {
-      if (!portalToken) return { status: 'error' as const, errorCode: 'AUTH_REQUIRED' as PortalErrorCode };
-      const res = await fetch(
-        `${base}/api/user/shop/consume?item_id=${encodeURIComponent(HINT_ITEM_ID)}&count=1&game_mode=${encodeURIComponent(HINT_GAME_MODE)}`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${portalToken}`,
-            'X-User-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-          },
-        }
-      );
-      const data = await res.json().catch(() => null);
-      if (res.ok && data?.success) {
-        return {
-          status: 'consumed' as const,
-          inventoryQuantity:
-            typeof data?.data?.inventory_quantity === 'number'
-              ? Math.max(0, Math.floor(data.data.inventory_quantity))
-              : null,
-        };
-      }
-      const errorCode = extractPortalErrorCode(data);
-      if (errorCode === 'insufficient_inventory') {
-        return { status: 'no_inventory' as const };
-      }
-      return { status: 'error' as const, errorCode };
-    },
-    [portalToken]
-  );
-
   const redeemPortalHint = useCallback(
     async (base: string) => {
       if (!portalToken) return { status: 'error' as const, errorCode: 'AUTH_REQUIRED' as PortalErrorCode };
@@ -563,52 +531,27 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     if (!token || !state.isPlaying || hintLoading || hintConfirmSubmitting) return 'failed';
     setHintLoading(true);
     try {
-      let consumed = false;
-      const base = normalizeApiBase(portalApiBase || process.env.NEXT_PUBLIC_PORTAL_API_BASE || '');
-      const portalEnabled = !!portalToken && !!base;
-
-      if (portalEnabled) {
-        const consumeResult = await consumePortalHint(base);
-        if (consumeResult.status === 'consumed') {
-          consumed = true;
-          void loadProgress(state.gameMode);
-        } else if (consumeResult.status === 'no_inventory') {
-          void loadProgress(state.gameMode);
-          return 'need_exchange';
-        } else {
-          const text = getPortalErrorMessage(consumeResult.errorCode ?? null) ?? 'Hint service unavailable.';
-          setMessage({
-            text,
-            className: 'text-rose-300',
-          });
-          setTimeout(() => setMessage(null), 2000);
-          return 'failed';
-        }
-      }
-
-      if (!consumed && !portalEnabled) {
-        const consumeRes = await fetch(`${getApiBase()}/api/hint/use`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const consumeData = await consumeRes.json();
-        if (!consumeData?.success) {
-          if (typeof consumeData?.data?.hint_count === 'number') {
-            setHintCount(Math.max(0, Math.floor(consumeData.data.hint_count)));
-          }
-          setMessage({
-            text: 'No hints left.',
-            className: 'text-amber-300',
-          });
-          setTimeout(() => setMessage(null), 1800);
-          return 'need_exchange';
-        }
-
+      const consumeRes = await fetch(`${getApiBase()}/api/hint/use`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const consumeData = await consumeRes.json().catch(() => null);
+      if (!consumeData?.success) {
         if (typeof consumeData?.data?.hint_count === 'number') {
           setHintCount(Math.max(0, Math.floor(consumeData.data.hint_count)));
-        } else {
-          setHintCount(prev => Math.max(0, prev - 1));
         }
+        setMessage({
+          text: 'No hints left.',
+          className: 'text-amber-300',
+        });
+        setTimeout(() => setMessage(null), 1800);
+        return 'need_exchange';
+      }
+
+      if (typeof consumeData?.data?.hint_count === 'number') {
+        setHintCount(Math.max(0, Math.floor(consumeData.data.hint_count)));
+      } else {
+        setHintCount(prev => Math.max(0, prev - 1));
       }
 
       const hint = getHintMove(state);
@@ -634,7 +577,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     } finally {
       setHintLoading(false);
     }
-  }, [consumePortalHint, hintConfirmSubmitting, hintLoading, loadProgress, portalApiBase, portalToken, state, token]);
+  }, [hintConfirmSubmitting, hintLoading, state, token]);
 
   const openHintExchangeDialog = useCallback(async (base: string) => {
     setHintConfirmOpen(true);
@@ -700,12 +643,25 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
   const confirmHintExchange = useCallback(async () => {
     if (hintConfirmSubmitting || hintConfirmLoading) return;
     const base = normalizeApiBase(portalApiBase || process.env.NEXT_PUBLIC_PORTAL_API_BASE || '');
-    if (!portalToken || !base) return;
+    if (!portalToken || !base || !token) return;
     setHintConfirmSubmitting(true);
     try {
       const redeemResult = await redeemPortalHint(base);
       if (redeemResult.status === 'success') {
-        await loadProgress(state.gameMode);
+        const grantRes = await fetch(`${getApiBase()}/api/hint/grant`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ amount: 1 }),
+        });
+        const grantData = await grantRes.json().catch(() => null);
+        if (grantData?.success && typeof grantData?.data?.hint_count === 'number') {
+          setHintCount(Math.max(0, Math.floor(grantData.data.hint_count)));
+        } else {
+          await loadProgress(state.gameMode);
+        }
         setHintConfirmError(null);
         const assets = await getPortalAssets(base);
         setPortalAssets(assets);
@@ -719,7 +675,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     } finally {
       setHintConfirmSubmitting(false);
     }
-  }, [getPortalAssets, hintConfirmLoading, hintConfirmSubmitting, loadProgress, portalApiBase, portalToken, redeemPortalHint, state.gameMode]);
+  }, [getPortalAssets, hintConfirmLoading, hintConfirmSubmitting, loadProgress, portalApiBase, portalToken, redeemPortalHint, state.gameMode, token]);
 
   const isHomeView = modalType === 'mode';
 
