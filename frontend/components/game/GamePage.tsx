@@ -72,10 +72,53 @@ type LeaderboardMode = 'classic' | 'math_tour';
 const HINT_ITEM_ID = 'chess_tourmaster_hint';
 const HINT_GAME_MODE = 'chess-tourmaster';
 const HINT_PRICE_COINS = 5;
+type PortalErrorCode =
+  | 'insufficient_assets'
+  | 'insufficient_inventory'
+  | 'item_not_available_for_game'
+  | 'invalid_item_id'
+  | 'AUTH_INVALID_TOKEN'
+  | 'AUTH_REQUIRED';
 
 function normalizeApiBase(input: string | null | undefined): string {
   if (!input) return '';
   return input.replace(/\/+$/, '');
+}
+
+function extractPortalErrorCode(data: any): PortalErrorCode | null {
+  const raw = data?.detail ?? data?.code ?? data?.error_code ?? data?.error?.code;
+  if (typeof raw !== 'string') return null;
+  const code = raw.trim();
+  if (
+    code === 'insufficient_assets' ||
+    code === 'insufficient_inventory' ||
+    code === 'item_not_available_for_game' ||
+    code === 'invalid_item_id' ||
+    code === 'AUTH_INVALID_TOKEN' ||
+    code === 'AUTH_REQUIRED'
+  ) {
+    return code;
+  }
+  return null;
+}
+
+function getPortalErrorMessage(code: PortalErrorCode | null): string | null {
+  if (!code) return null;
+  switch (code) {
+    case 'insufficient_assets':
+      return 'Not enough coins.';
+    case 'insufficient_inventory':
+      return 'Hint inventory is insufficient.';
+    case 'item_not_available_for_game':
+      return 'This item is not available for this game.';
+    case 'invalid_item_id':
+      return 'Item configuration error.';
+    case 'AUTH_INVALID_TOKEN':
+    case 'AUTH_REQUIRED':
+      return 'Session expired. Please log in again.';
+    default:
+      return null;
+  }
 }
 
 export default function GamePage({ token, username, portalToken, portalApiBase }: Props) {
@@ -458,7 +501,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
 
   const consumePortalHint = useCallback(
     async (base: string) => {
-      if (!portalToken) return { status: 'error' as const };
+      if (!portalToken) return { status: 'error' as const, errorCode: 'AUTH_REQUIRED' as PortalErrorCode };
       const res = await fetch(
         `${base}/api/user/shop/consume?item_id=${encodeURIComponent(HINT_ITEM_ID)}&count=1&game_mode=${encodeURIComponent(HINT_GAME_MODE)}`,
         {
@@ -479,17 +522,18 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
               : null,
         };
       }
-      if (data?.detail === 'insufficient_inventory') {
+      const errorCode = extractPortalErrorCode(data);
+      if (errorCode === 'insufficient_inventory') {
         return { status: 'no_inventory' as const };
       }
-      return { status: 'error' as const };
+      return { status: 'error' as const, errorCode };
     },
     [portalToken]
   );
 
   const redeemPortalHint = useCallback(
     async (base: string) => {
-      if (!portalToken) return { status: 'error' as const };
+      if (!portalToken) return { status: 'error' as const, errorCode: 'AUTH_REQUIRED' as PortalErrorCode };
       const res = await fetch(
         `${base}/api/user/shop/redeem?item_id=${encodeURIComponent(HINT_ITEM_ID)}&game_mode=${encodeURIComponent(HINT_GAME_MODE)}`,
         {
@@ -510,10 +554,11 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
               : null,
         };
       }
-      if (data?.detail === 'insufficient_assets') {
+      const errorCode = extractPortalErrorCode(data);
+      if (errorCode === 'insufficient_assets') {
         return { status: 'insufficient_assets' as const };
       }
-      return { status: 'error' as const };
+      return { status: 'error' as const, errorCode };
     },
     [portalToken]
   );
@@ -560,21 +605,27 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
           }
         } else if (consumeResult.status === 'no_inventory' && !allowAutoRedeem) {
           setHintCount(0);
+          setMessage({
+            text: 'Hint inventory is insufficient.',
+            className: 'text-amber-300',
+          });
+          setTimeout(() => setMessage(null), 1800);
           return 'need_exchange';
         } else if (consumeResult.status === 'no_inventory' && allowAutoRedeem) {
           setHintCount(0);
           const redeemResult = await redeemPortalHint(base);
           if (redeemResult.status === 'insufficient_assets') {
             setMessage({
-              text: `Not enough coins. Need ${HINT_PRICE_COINS}.`,
+              text: 'Not enough coins.',
               className: 'text-amber-300',
             });
             setTimeout(() => setMessage(null), 2200);
             return 'failed';
           }
           if (redeemResult.status !== 'success') {
+            const text = getPortalErrorMessage(redeemResult.errorCode ?? null) ?? 'Hint service unavailable.';
             setMessage({
-              text: 'Hint service unavailable.',
+              text,
               className: 'text-rose-300',
             });
             setTimeout(() => setMessage(null), 2000);
@@ -585,8 +636,11 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
           }
           const consumeAfterRedeem = await consumePortalHint(base);
           if (consumeAfterRedeem.status !== 'consumed') {
+            const text = consumeAfterRedeem.status === 'no_inventory'
+              ? getPortalErrorMessage('insufficient_inventory')
+              : getPortalErrorMessage(consumeAfterRedeem.errorCode ?? null) ?? 'Hint service unavailable.';
             setMessage({
-              text: 'Hint service unavailable.',
+              text: text ?? 'Hint service unavailable.',
               className: 'text-rose-300',
             });
             setTimeout(() => setMessage(null), 2000);
@@ -599,8 +653,9 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
             setHintCount(prev => Math.max(0, prev - 1));
           }
         } else {
+          const text = getPortalErrorMessage(consumeResult.errorCode ?? null) ?? 'Hint service unavailable.';
           setMessage({
-            text: 'Hint service unavailable.',
+            text,
             className: 'text-rose-300',
           });
           setTimeout(() => setMessage(null), 2000);
