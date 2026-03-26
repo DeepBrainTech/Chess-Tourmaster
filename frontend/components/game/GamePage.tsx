@@ -71,7 +71,7 @@ type PortalAssets = {
 type LeaderboardMode = 'classic' | 'math_tour';
 const HINT_ITEM_ID = 'chess_tourmaster_hint';
 const HINT_GAME_MODE = 'chess-tourmaster';
-const HINT_PRICE_COINS = 10;
+const HINT_PRICE_COINS = 5;
 
 function normalizeApiBase(input: string | null | undefined): string {
   if (!input) return '';
@@ -541,8 +541,8 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     [portalToken]
   );
 
-  const executeHint = useCallback(async (allowAutoRedeem: boolean): Promise<boolean> => {
-    if (!token || !state.isPlaying || hintLoading || hintConfirmSubmitting) return false;
+  const executeHint = useCallback(async (allowAutoRedeem: boolean): Promise<'used' | 'need_exchange' | 'failed'> => {
+    if (!token || !state.isPlaying || hintLoading || hintConfirmSubmitting) return 'failed';
     setHintLoading(true);
     try {
       let consumed = false;
@@ -580,11 +580,11 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
                 className: 'text-amber-300',
               });
               setTimeout(() => setMessage(null), 2200);
-              return false;
+              return 'failed';
             }
           } else if (consumeResult.status === 'no_inventory' && !allowAutoRedeem) {
             setHintCount(0);
-            return false;
+            return 'need_exchange';
           }
         }
       }
@@ -604,7 +604,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
             className: 'text-amber-300',
           });
           setTimeout(() => setMessage(null), 1800);
-          return false;
+          return allowAutoRedeem ? 'failed' : 'need_exchange';
         }
 
         if (typeof consumeData?.data?.hint_count === 'number') {
@@ -625,7 +625,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
         });
         setTimeout(() => setMessage(null), 2400);
       }
-      return true;
+      return 'used';
     } catch {
       setHintTarget(null);
       setMessage({
@@ -633,11 +633,31 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
         className: 'text-rose-300',
       });
       setTimeout(() => setMessage(null), 2000);
-      return false;
+      return 'failed';
     } finally {
       setHintLoading(false);
     }
   }, [consumePortalHint, hintConfirmSubmitting, hintLoading, portalApiBase, portalToken, redeemPortalHint, state, token]);
+
+  const openHintExchangeDialog = useCallback(async (base: string) => {
+    setHintConfirmOpen(true);
+    setHintConfirmLoading(true);
+    setHintConfirmError(null);
+    try {
+      const assets = await getPortalAssets(base);
+      if (!assets) {
+        setPortalAssets(null);
+        setHintConfirmError('Failed to load assets.');
+      } else {
+        setPortalAssets(assets);
+      }
+    } catch {
+      setPortalAssets(null);
+      setHintConfirmError('Failed to load assets.');
+    } finally {
+      setHintConfirmLoading(false);
+    }
+  }, [getPortalAssets]);
 
   const handleHint = useCallback(async () => {
     if (!token || !state.isPlaying || hintLoading || hintConfirmSubmitting) return;
@@ -668,36 +688,24 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
       return;
     }
 
-    if (hintCount > 0) {
-      await executeHint(false);
+    if (hintCount <= 0) {
+      await openHintExchangeDialog(base);
       return;
     }
 
-    setHintConfirmOpen(true);
-    setHintConfirmLoading(true);
-    setHintConfirmError(null);
-    try {
-      const assets = await getPortalAssets(base);
-      if (!assets) {
-        setPortalAssets(null);
-        setHintConfirmError('Failed to load assets.');
-      } else {
-        setPortalAssets(assets);
-      }
-    } catch {
-      setPortalAssets(null);
-      setHintConfirmError('Failed to load assets.');
-    } finally {
-      setHintConfirmLoading(false);
+    const result = await executeHint(false);
+    if (result === 'need_exchange') {
+      await openHintExchangeDialog(base);
+      return;
     }
-  }, [executeHint, getPortalAssets, hintConfirmSubmitting, hintCount, hintLoading, portalApiBase, portalToken, state.isPlaying, token]);
+  }, [executeHint, hintConfirmSubmitting, hintCount, hintLoading, openHintExchangeDialog, portalApiBase, portalToken, state.isPlaying, token]);
 
   const confirmHintExchange = useCallback(async () => {
     if (hintConfirmSubmitting || hintConfirmLoading) return;
     setHintConfirmSubmitting(true);
     try {
-      const ok = await executeHint(true);
-      if (ok) {
+      const result = await executeHint(true);
+      if (result === 'used') {
         setHintConfirmOpen(false);
       }
     } finally {
