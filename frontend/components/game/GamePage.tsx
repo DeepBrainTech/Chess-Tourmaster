@@ -546,50 +546,69 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     setHintLoading(true);
     try {
       let consumed = false;
+      const base = normalizeApiBase(portalApiBase || process.env.NEXT_PUBLIC_PORTAL_API_BASE || '');
+      const portalEnabled = !!portalToken && !!base;
 
-      if (portalToken) {
-        const base = normalizeApiBase(portalApiBase || process.env.NEXT_PUBLIC_PORTAL_API_BASE || '');
-        if (base) {
-          const consumeResult = await consumePortalHint(base);
-          if (consumeResult.status === 'consumed') {
-            consumed = true;
-            if (consumeResult.inventoryQuantity != null) {
-              setHintCount(consumeResult.inventoryQuantity);
-            } else {
-              setHintCount(prev => Math.max(0, prev - 1));
-            }
-          } else if (consumeResult.status === 'no_inventory' && allowAutoRedeem) {
-            setHintCount(0);
-            const redeemResult = await redeemPortalHint(base);
-            if (redeemResult.status === 'success') {
-              if (redeemResult.inventoryQuantity != null) {
-                setHintCount(redeemResult.inventoryQuantity);
-              }
-              const consumeAfterRedeem = await consumePortalHint(base);
-              if (consumeAfterRedeem.status === 'consumed') {
-                consumed = true;
-                if (consumeAfterRedeem.inventoryQuantity != null) {
-                  setHintCount(consumeAfterRedeem.inventoryQuantity);
-                } else {
-                  setHintCount(prev => Math.max(0, prev - 1));
-                }
-              }
-            } else if (redeemResult.status === 'insufficient_assets') {
-              setMessage({
-                text: `Not enough coins. Need ${HINT_PRICE_COINS}.`,
-                className: 'text-amber-300',
-              });
-              setTimeout(() => setMessage(null), 2200);
-              return 'failed';
-            }
-          } else if (consumeResult.status === 'no_inventory' && !allowAutoRedeem) {
-            setHintCount(0);
-            return 'need_exchange';
+      if (portalEnabled) {
+        const consumeResult = await consumePortalHint(base);
+        if (consumeResult.status === 'consumed') {
+          consumed = true;
+          if (consumeResult.inventoryQuantity != null) {
+            setHintCount(consumeResult.inventoryQuantity);
+          } else {
+            setHintCount(prev => Math.max(0, prev - 1));
           }
+        } else if (consumeResult.status === 'no_inventory' && !allowAutoRedeem) {
+          setHintCount(0);
+          return 'need_exchange';
+        } else if (consumeResult.status === 'no_inventory' && allowAutoRedeem) {
+          setHintCount(0);
+          const redeemResult = await redeemPortalHint(base);
+          if (redeemResult.status === 'insufficient_assets') {
+            setMessage({
+              text: `Not enough coins. Need ${HINT_PRICE_COINS}.`,
+              className: 'text-amber-300',
+            });
+            setTimeout(() => setMessage(null), 2200);
+            return 'failed';
+          }
+          if (redeemResult.status !== 'success') {
+            setMessage({
+              text: 'Hint service unavailable.',
+              className: 'text-rose-300',
+            });
+            setTimeout(() => setMessage(null), 2000);
+            return 'failed';
+          }
+          if (redeemResult.inventoryQuantity != null) {
+            setHintCount(redeemResult.inventoryQuantity);
+          }
+          const consumeAfterRedeem = await consumePortalHint(base);
+          if (consumeAfterRedeem.status !== 'consumed') {
+            setMessage({
+              text: 'Hint service unavailable.',
+              className: 'text-rose-300',
+            });
+            setTimeout(() => setMessage(null), 2000);
+            return 'failed';
+          }
+          consumed = true;
+          if (consumeAfterRedeem.inventoryQuantity != null) {
+            setHintCount(consumeAfterRedeem.inventoryQuantity);
+          } else {
+            setHintCount(prev => Math.max(0, prev - 1));
+          }
+        } else {
+          setMessage({
+            text: 'Hint service unavailable.',
+            className: 'text-rose-300',
+          });
+          setTimeout(() => setMessage(null), 2000);
+          return 'failed';
         }
       }
 
-      if (!consumed) {
+      if (!consumed && !portalEnabled) {
         const consumeRes = await fetch(`${getApiBase()}/api/hint/use`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
