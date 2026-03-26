@@ -188,32 +188,6 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     }
   }, [token]);
 
-  const loadPortalHintState = useCallback(async () => {
-    if (!portalToken) return false;
-    const base = normalizeApiBase(portalApiBase || process.env.NEXT_PUBLIC_PORTAL_API_BASE || '');
-    if (!base) return false;
-
-    const headers: HeadersInit = {
-      Authorization: `Bearer ${portalToken}`,
-      'X-User-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-    };
-    try {
-      const invRes = await fetch(`${base}/api/user/shop/inventory`, { headers });
-      const invJson = await invRes.json().catch(() => null);
-
-      const items = Array.isArray(invJson?.data?.items) ? invJson.data.items : [];
-      const hintRow = items.find((row: any) => row?.item_id === HINT_ITEM_ID);
-      if (typeof hintRow?.quantity === 'number') {
-        setHintCount(Math.max(0, Math.floor(hintRow.quantity)));
-      } else {
-        setHintCount(0);
-      }
-      return true;
-    } catch {
-      return false;
-    }
-  }, [portalApiBase, portalToken]);
-
   const saveProgress = useCallback(
     async (
       maxUnlockedLevel: number,
@@ -271,8 +245,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      const ok = await loadPortalHintState();
-      if (!ok && !cancelled) {
+      if (!cancelled) {
         await loadProgress(state.gameMode);
       }
     };
@@ -280,7 +253,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     return () => {
       cancelled = true;
     };
-  }, [loadPortalHintState, loadProgress, state.gameMode]);
+  }, [loadProgress, state.gameMode]);
 
   useEffect(() => {
     if (modalType !== 'mode' && modalType !== 'leaderboard') return;
@@ -598,13 +571,9 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
         const consumeResult = await consumePortalHint(base);
         if (consumeResult.status === 'consumed') {
           consumed = true;
-          if (consumeResult.inventoryQuantity != null) {
-            setHintCount(consumeResult.inventoryQuantity);
-          } else {
-            setHintCount(prev => Math.max(0, prev - 1));
-          }
+          void loadProgress(state.gameMode);
         } else if (consumeResult.status === 'no_inventory') {
-          setHintCount(0);
+          void loadProgress(state.gameMode);
           return 'need_exchange';
         } else {
           const text = getPortalErrorMessage(consumeResult.errorCode ?? null) ?? 'Hint service unavailable.';
@@ -665,7 +634,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     } finally {
       setHintLoading(false);
     }
-  }, [consumePortalHint, hintConfirmSubmitting, hintLoading, portalApiBase, portalToken, state, token]);
+  }, [consumePortalHint, hintConfirmSubmitting, hintLoading, loadProgress, portalApiBase, portalToken, state, token]);
 
   const openHintExchangeDialog = useCallback(async (base: string) => {
     setHintConfirmOpen(true);
@@ -736,11 +705,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     try {
       const redeemResult = await redeemPortalHint(base);
       if (redeemResult.status === 'success') {
-        if (redeemResult.inventoryQuantity != null) {
-          setHintCount(redeemResult.inventoryQuantity);
-        } else {
-          setHintCount(prev => prev + 1);
-        }
+        await loadProgress(state.gameMode);
         setHintConfirmError(null);
         const assets = await getPortalAssets(base);
         setPortalAssets(assets);
@@ -754,7 +719,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     } finally {
       setHintConfirmSubmitting(false);
     }
-  }, [getPortalAssets, hintConfirmLoading, hintConfirmSubmitting, portalApiBase, portalToken, redeemPortalHint]);
+  }, [getPortalAssets, hintConfirmLoading, hintConfirmSubmitting, loadProgress, portalApiBase, portalToken, redeemPortalHint, state.gameMode]);
 
   const isHomeView = modalType === 'mode';
 
