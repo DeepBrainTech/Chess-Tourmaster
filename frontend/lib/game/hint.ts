@@ -37,11 +37,7 @@ function nextKnightMoves(pos: Pos, size: number): Pos[] {
   return moves;
 }
 
-export function getHintMove(state: GameState): HintResult {
-  if (!state.isPlaying || state.grid.length === 0) {
-    return { type: 'no_win_path' };
-  }
-
+function getClassicHintMove(state: GameState): HintResult {
   const size = state.gridSizeVal;
   const king = state.kingPos;
   const indexByPos = new Map<string, number>();
@@ -138,4 +134,102 @@ export function getHintMove(state: GameState): HintResult {
   }
 
   return { type: 'no_win_path' };
+}
+
+function isReachableMathTile(state: GameState, pos: Pos): boolean {
+  const tile = state.grid[pos.r]?.[pos.c];
+  if (!tile) return false;
+  if (tile.type === 'void' || tile.type === 'king' || tile.visited) return false;
+  return true;
+}
+
+function getMathMoveGain(state: GameState, pos: Pos): number {
+  const tile = state.grid[pos.r]?.[pos.c];
+  if (!tile || tile.type === 'void' || tile.type === 'king' || tile.visited) return Number.NEGATIVE_INFINITY;
+  const tileMult = tile.tileMultiplier ?? 1;
+  if (tileMult > 1) {
+    return state.currentScore * (tileMult - 1);
+  }
+  return (tile.value ?? 0) * state.scoreMultiplier;
+}
+
+function canCaptureKingFrom(state: GameState, pos: Pos, score: number): boolean {
+  if (score < state.requiredScore) return false;
+  return nextKnightMoves(pos, state.gridSizeVal).some(
+    move => move.r === state.kingPos.r && move.c === state.kingPos.c
+  );
+}
+
+function hasFollowUpMove(state: GameState, from: Pos, consumed: Pos, scoreAfterMove: number): boolean {
+  return nextKnightMoves(from, state.gridSizeVal).some((move) => {
+    if (move.r === state.kingPos.r && move.c === state.kingPos.c) {
+      return scoreAfterMove >= state.requiredScore;
+    }
+    if (move.r === consumed.r && move.c === consumed.c) return false;
+    return isReachableMathTile(state, move);
+  });
+}
+
+function getMathHintMove(state: GameState): HintResult {
+  const immediateKing = nextKnightMoves(state.knightPos, state.gridSizeVal).find(
+    move => move.r === state.kingPos.r && move.c === state.kingPos.c
+  );
+  if (immediateKing && state.currentScore >= state.requiredScore) {
+    return { type: 'next_move', move: immediateKing };
+  }
+
+  const candidates = nextKnightMoves(state.knightPos, state.gridSizeVal).filter(
+    move => isReachableMathTile(state, move)
+  );
+  if (candidates.length === 0) {
+    return { type: 'no_win_path' };
+  }
+
+  const scored = candidates.map((move) => {
+    const gain = getMathMoveGain(state, move);
+    const nextScore = state.currentScore + gain;
+    const canCaptureAfterThisMove = canCaptureKingFrom(state, move, nextScore);
+    const hasFollowUp = hasFollowUpMove(state, move, move, nextScore);
+    const mobility = nextKnightMoves(move, state.gridSizeVal).filter((next) => {
+      if (next.r === state.kingPos.r && next.c === state.kingPos.c) return nextScore >= state.requiredScore;
+      if (next.r === move.r && next.c === move.c) return false;
+      return isReachableMathTile(state, next);
+    }).length;
+    return {
+      move,
+      gain,
+      nextScore,
+      canCaptureAfterThisMove,
+      hasFollowUp,
+      mobility,
+    };
+  });
+
+  scored.sort((a, b) => {
+    if (a.canCaptureAfterThisMove !== b.canCaptureAfterThisMove) {
+      return a.canCaptureAfterThisMove ? -1 : 1;
+    }
+    if (a.hasFollowUp !== b.hasFollowUp) {
+      return a.hasFollowUp ? -1 : 1;
+    }
+    if (a.nextScore !== b.nextScore) {
+      return b.nextScore - a.nextScore;
+    }
+    if (a.mobility !== b.mobility) {
+      return b.mobility - a.mobility;
+    }
+    return b.gain - a.gain;
+  });
+
+  return { type: 'next_move', move: scored[0].move };
+}
+
+export function getHintMove(state: GameState): HintResult {
+  if (!state.isPlaying || state.grid.length === 0) {
+    return { type: 'no_win_path' };
+  }
+  if (state.gameMode === 'math_tour') {
+    return getMathHintMove(state);
+  }
+  return getClassicHintMove(state);
 }

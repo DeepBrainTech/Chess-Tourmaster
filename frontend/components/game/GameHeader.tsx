@@ -109,7 +109,7 @@ export default function GameHeader({
         <button
           type="button"
           onClick={onHint}
-          disabled={hintLoading || hintCount <= 0}
+          disabled={hintLoading}
           className="bg-amber-700/80 hover:bg-amber-600 text-white px-2 lg:px-3 py-2 lg:py-3 rounded-lg shadow-lg border border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
           title={`Hint (${hintCount})`}
         >
