@@ -586,7 +586,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     [portalToken]
   );
 
-  const executeHint = useCallback(async (allowAutoRedeem: boolean): Promise<'used' | 'need_exchange' | 'failed'> => {
+  const executeHint = useCallback(async (): Promise<'used' | 'need_exchange' | 'failed'> => {
     if (!token || !state.isPlaying || hintLoading || hintConfirmSubmitting) return 'failed';
     setHintLoading(true);
     try {
@@ -603,55 +603,9 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
           } else {
             setHintCount(prev => Math.max(0, prev - 1));
           }
-        } else if (consumeResult.status === 'no_inventory' && !allowAutoRedeem) {
+        } else if (consumeResult.status === 'no_inventory') {
           setHintCount(0);
-          setMessage({
-            text: 'Hint inventory is insufficient.',
-            className: 'text-amber-300',
-          });
-          setTimeout(() => setMessage(null), 1800);
           return 'need_exchange';
-        } else if (consumeResult.status === 'no_inventory' && allowAutoRedeem) {
-          setHintCount(0);
-          const redeemResult = await redeemPortalHint(base);
-          if (redeemResult.status === 'insufficient_assets') {
-            setMessage({
-              text: 'Not enough coins.',
-              className: 'text-amber-300',
-            });
-            setTimeout(() => setMessage(null), 2200);
-            return 'failed';
-          }
-          if (redeemResult.status !== 'success') {
-            const text = getPortalErrorMessage(redeemResult.errorCode ?? null) ?? 'Hint service unavailable.';
-            setMessage({
-              text,
-              className: 'text-rose-300',
-            });
-            setTimeout(() => setMessage(null), 2000);
-            return 'failed';
-          }
-          if (redeemResult.inventoryQuantity != null) {
-            setHintCount(redeemResult.inventoryQuantity);
-          }
-          const consumeAfterRedeem = await consumePortalHint(base);
-          if (consumeAfterRedeem.status !== 'consumed') {
-            const text = consumeAfterRedeem.status === 'no_inventory'
-              ? getPortalErrorMessage('insufficient_inventory')
-              : getPortalErrorMessage(consumeAfterRedeem.errorCode ?? null) ?? 'Hint service unavailable.';
-            setMessage({
-              text: text ?? 'Hint service unavailable.',
-              className: 'text-rose-300',
-            });
-            setTimeout(() => setMessage(null), 2000);
-            return 'failed';
-          }
-          consumed = true;
-          if (consumeAfterRedeem.inventoryQuantity != null) {
-            setHintCount(consumeAfterRedeem.inventoryQuantity);
-          } else {
-            setHintCount(prev => Math.max(0, prev - 1));
-          }
         } else {
           const text = getPortalErrorMessage(consumeResult.errorCode ?? null) ?? 'Hint service unavailable.';
           setMessage({
@@ -678,7 +632,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
             className: 'text-amber-300',
           });
           setTimeout(() => setMessage(null), 1800);
-          return allowAutoRedeem ? 'failed' : 'need_exchange';
+          return 'need_exchange';
         }
 
         if (typeof consumeData?.data?.hint_count === 'number') {
@@ -711,7 +665,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     } finally {
       setHintLoading(false);
     }
-  }, [consumePortalHint, hintConfirmSubmitting, hintLoading, portalApiBase, portalToken, redeemPortalHint, state, token]);
+  }, [consumePortalHint, hintConfirmSubmitting, hintLoading, portalApiBase, portalToken, state, token]);
 
   const openHintExchangeDialog = useCallback(async (base: string) => {
     setHintConfirmOpen(true);
@@ -744,7 +698,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
         setTimeout(() => setMessage(null), 1800);
         return;
       }
-      await executeHint(false);
+      await executeHint();
       return;
     }
 
@@ -758,7 +712,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
         setTimeout(() => setMessage(null), 1800);
         return;
       }
-      await executeHint(false);
+      await executeHint();
       return;
     }
 
@@ -767,7 +721,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
       return;
     }
 
-    const result = await executeHint(false);
+    const result = await executeHint();
     if (result === 'need_exchange') {
       await openHintExchangeDialog(base);
       return;
@@ -776,16 +730,31 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
 
   const confirmHintExchange = useCallback(async () => {
     if (hintConfirmSubmitting || hintConfirmLoading) return;
+    const base = normalizeApiBase(portalApiBase || process.env.NEXT_PUBLIC_PORTAL_API_BASE || '');
+    if (!portalToken || !base) return;
     setHintConfirmSubmitting(true);
     try {
-      const result = await executeHint(true);
-      if (result === 'used') {
+      const redeemResult = await redeemPortalHint(base);
+      if (redeemResult.status === 'success') {
+        if (redeemResult.inventoryQuantity != null) {
+          setHintCount(redeemResult.inventoryQuantity);
+        } else {
+          setHintCount(prev => prev + 1);
+        }
+        setHintConfirmError(null);
+        const assets = await getPortalAssets(base);
+        setPortalAssets(assets);
         setHintConfirmOpen(false);
+        return;
       }
+      const text = redeemResult.status === 'insufficient_assets'
+        ? getPortalErrorMessage('insufficient_assets')
+        : getPortalErrorMessage(redeemResult.errorCode ?? null);
+      setHintConfirmError(text ?? 'Hint exchange failed.');
     } finally {
       setHintConfirmSubmitting(false);
     }
-  }, [executeHint, hintConfirmLoading, hintConfirmSubmitting]);
+  }, [getPortalAssets, hintConfirmLoading, hintConfirmSubmitting, portalApiBase, portalToken, redeemPortalHint]);
 
   const isHomeView = modalType === 'mode';
 
