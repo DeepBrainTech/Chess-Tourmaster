@@ -42,6 +42,8 @@ function decodeJwt(token: string): { user_id?: number; username?: string } | nul
 
 export default function Home() {
   const [token, setToken] = useState<string | null>(null);
+  const [portalToken, setPortalToken] = useState<string | null>(null);
+  const [portalApiBase, setPortalApiBase] = useState<string>('');
   const [username, setUsername] = useState<string>('Guest');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -54,8 +56,12 @@ export default function Home() {
     if (!mounted) return;
     const params = getHashParams();
     let t = params.token || null;
+    const pt = params.portal_token || null;
+    const pa = params.portal_api || '';
     if (!t && isLocalDev()) t = DEV_TOKEN;
     setToken(t);
+    setPortalToken(pt);
+    setPortalApiBase(pa);
     if (t) {
       const payload = decodeJwt(t);
       if (payload?.user_id !== undefined && payload?.username) {
@@ -101,5 +107,12 @@ export default function Home() {
     );
   }
 
-  return <GamePage token={token} username={username} />;
+  return (
+    <GamePage
+      token={token}
+      username={username}
+      portalToken={portalToken}
+      portalApiBase={portalApiBase}
+    />
+  );
 }

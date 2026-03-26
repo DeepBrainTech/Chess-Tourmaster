@@ -52,15 +52,33 @@ function normalizeStars(value: unknown): number {
   return Math.max(0, Math.min(3, Math.floor(value)));
 }
 
-type Props = { token: string | null; username: string };
+type Props = {
+  token: string | null;
+  username: string;
+  portalToken: string | null;
+  portalApiBase: string;
+};
 type LeaderboardEntry = {
   rank: number;
   username: string;
   total_levels: number;
 };
+type PortalAssets = {
+  coins: number;
+  diamonds: number;
+  flowers: number;
+};
 type LeaderboardMode = 'classic' | 'math_tour';
+const HINT_ITEM_ID = 'chess_tourmaster_hint';
+const HINT_GAME_MODE = 'chess-tourmaster';
+const HINT_PRICE_COINS = 10;
 
-export default function GamePage({ token, username }: Props) {
+function normalizeApiBase(input: string | null | undefined): string {
+  if (!input) return '';
+  return input.replace(/\/+$/, '');
+}
+
+export default function GamePage({ token, username, portalToken, portalApiBase }: Props) {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
   const [modalType, setModalType] = useState<ModalType>('mode');
   const [winData, setWinData] = useState<WinData | null>(null);
@@ -69,6 +87,11 @@ export default function GamePage({ token, username }: Props) {
   const [leaderboardMode, setLeaderboardMode] = useState<LeaderboardMode>('classic');
   const [hintCount, setHintCount] = useState(1);
   const [hintLoading, setHintLoading] = useState(false);
+  const [hintConfirmOpen, setHintConfirmOpen] = useState(false);
+  const [hintConfirmLoading, setHintConfirmLoading] = useState(false);
+  const [hintConfirmSubmitting, setHintConfirmSubmitting] = useState(false);
+  const [portalAssets, setPortalAssets] = useState<PortalAssets | null>(null);
+  const [hintConfirmError, setHintConfirmError] = useState<string | null>(null);
   const [hintTarget, setHintTarget] = useState<{ r: number; c: number } | null>(null);
   const [message, setMessage] = useState<{ text: string; className: string } | null>(null);
   const [shake, setShake] = useState(false);
@@ -121,6 +144,32 @@ export default function GamePage({ token, username }: Props) {
       return null;
     }
   }, [token]);
+
+  const loadPortalHintState = useCallback(async () => {
+    if (!portalToken) return false;
+    const base = normalizeApiBase(portalApiBase || process.env.NEXT_PUBLIC_PORTAL_API_BASE || '');
+    if (!base) return false;
+
+    const headers: HeadersInit = {
+      Authorization: `Bearer ${portalToken}`,
+      'X-User-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    };
+    try {
+      const invRes = await fetch(`${base}/api/user/shop/inventory`, { headers });
+      const invJson = await invRes.json().catch(() => null);
+
+      const items = Array.isArray(invJson?.data?.items) ? invJson.data.items : [];
+      const hintRow = items.find((row: any) => row?.item_id === HINT_ITEM_ID);
+      if (typeof hintRow?.quantity === 'number') {
+        setHintCount(Math.max(0, Math.floor(hintRow.quantity)));
+      } else {
+        setHintCount(0);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }, [portalApiBase, portalToken]);
 
   const saveProgress = useCallback(
     async (
@@ -177,8 +226,18 @@ export default function GamePage({ token, username }: Props) {
   }, []);
 
   useEffect(() => {
-    loadProgress(state.gameMode);
-  }, [loadProgress, state.gameMode]);
+    let cancelled = false;
+    const run = async () => {
+      const ok = await loadPortalHintState();
+      if (!ok && !cancelled) {
+        await loadProgress(state.gameMode);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadPortalHintState, loadProgress, state.gameMode]);
 
   useEffect(() => {
     if (modalType !== 'mode' && modalType !== 'leaderboard') return;
@@ -397,40 +456,159 @@ export default function GamePage({ token, username }: Props) {
     [state.level, state.maxUnlockedLevel, startLevel]
   );
 
-  const handleHint = useCallback(async () => {
-    if (!token || !state.isPlaying || hintLoading) return;
-    if (hintCount <= 0) {
-      setMessage({
-        text: 'No hints left.',
-        className: 'text-amber-300',
-      });
-      setTimeout(() => setMessage(null), 1800);
-      return;
-    }
+  const consumePortalHint = useCallback(
+    async (base: string) => {
+      if (!portalToken) return { status: 'error' as const };
+      const res = await fetch(
+        `${base}/api/user/shop/consume?item_id=${encodeURIComponent(HINT_ITEM_ID)}&count=1&game_mode=${encodeURIComponent(HINT_GAME_MODE)}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${portalToken}`,
+            'X-User-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+          },
+        }
+      );
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success) {
+        return {
+          status: 'consumed' as const,
+          inventoryQuantity:
+            typeof data?.data?.inventory_quantity === 'number'
+              ? Math.max(0, Math.floor(data.data.inventory_quantity))
+              : null,
+        };
+      }
+      if (data?.detail === 'insufficient_inventory') {
+        return { status: 'no_inventory' as const };
+      }
+      return { status: 'error' as const };
+    },
+    [portalToken]
+  );
 
+  const redeemPortalHint = useCallback(
+    async (base: string) => {
+      if (!portalToken) return { status: 'error' as const };
+      const res = await fetch(
+        `${base}/api/user/shop/redeem?item_id=${encodeURIComponent(HINT_ITEM_ID)}&game_mode=${encodeURIComponent(HINT_GAME_MODE)}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${portalToken}`,
+            'X-User-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+          },
+        }
+      );
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success) {
+        return {
+          status: 'success' as const,
+          inventoryQuantity:
+            typeof data?.data?.inventory_quantity === 'number'
+              ? Math.max(0, Math.floor(data.data.inventory_quantity))
+              : null,
+        };
+      }
+      if (data?.detail === 'insufficient_assets') {
+        return { status: 'insufficient_assets' as const };
+      }
+      return { status: 'error' as const };
+    },
+    [portalToken]
+  );
+
+  const getPortalAssets = useCallback(
+    async (base: string) => {
+      if (!portalToken) return null;
+      const res = await fetch(`${base}/api/user/assets`, {
+        headers: {
+          Authorization: `Bearer ${portalToken}`,
+          'X-User-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        },
+      });
+      const data = await res.json().catch(() => null);
+      const coins = data?.data?.coins;
+      const diamonds = data?.data?.diamonds;
+      const flowers = data?.data?.flowers;
+      if (typeof coins !== 'number' || typeof diamonds !== 'number' || typeof flowers !== 'number') return null;
+      return {
+        coins: Math.max(0, Math.floor(coins)),
+        diamonds: Math.max(0, Math.floor(diamonds)),
+        flowers: Math.max(0, Math.floor(flowers)),
+      };
+    },
+    [portalToken]
+  );
+
+  const executeHint = useCallback(async () => {
+    if (!token || !state.isPlaying || hintLoading || hintConfirmSubmitting) return;
     setHintLoading(true);
     try {
-      const consumeRes = await fetch(`${getApiBase()}/api/hint/use`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const consumeData = await consumeRes.json();
-      if (!consumeData?.success) {
-        if (typeof consumeData?.data?.hint_count === 'number') {
-          setHintCount(Math.max(0, Math.floor(consumeData.data.hint_count)));
+      let consumed = false;
+
+      if (portalToken) {
+        const base = normalizeApiBase(portalApiBase || process.env.NEXT_PUBLIC_PORTAL_API_BASE || '');
+        if (base) {
+          const consumeResult = await consumePortalHint(base);
+          if (consumeResult.status === 'consumed') {
+            consumed = true;
+            if (consumeResult.inventoryQuantity != null) {
+              setHintCount(consumeResult.inventoryQuantity);
+            } else {
+              setHintCount(prev => Math.max(0, prev - 1));
+            }
+          } else if (consumeResult.status === 'no_inventory') {
+            setHintCount(0);
+            const redeemResult = await redeemPortalHint(base);
+            if (redeemResult.status === 'success') {
+              if (redeemResult.inventoryQuantity != null) {
+                setHintCount(redeemResult.inventoryQuantity);
+              }
+              const consumeAfterRedeem = await consumePortalHint(base);
+              if (consumeAfterRedeem.status === 'consumed') {
+                consumed = true;
+                if (consumeAfterRedeem.inventoryQuantity != null) {
+                  setHintCount(consumeAfterRedeem.inventoryQuantity);
+                } else {
+                  setHintCount(prev => Math.max(0, prev - 1));
+                }
+              }
+            } else if (redeemResult.status === 'insufficient_assets') {
+              setMessage({
+                text: `Not enough coins. Need ${HINT_PRICE_COINS}.`,
+                className: 'text-amber-300',
+              });
+              setTimeout(() => setMessage(null), 2200);
+              return;
+            }
+          }
         }
-        setMessage({
-          text: 'No hints left.',
-          className: 'text-amber-300',
-        });
-        setTimeout(() => setMessage(null), 1800);
-        return;
       }
 
-      if (typeof consumeData?.data?.hint_count === 'number') {
-        setHintCount(Math.max(0, Math.floor(consumeData.data.hint_count)));
-      } else {
-        setHintCount(prev => Math.max(0, prev - 1));
+      if (!consumed) {
+        const consumeRes = await fetch(`${getApiBase()}/api/hint/use`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const consumeData = await consumeRes.json();
+        if (!consumeData?.success) {
+          if (typeof consumeData?.data?.hint_count === 'number') {
+            setHintCount(Math.max(0, Math.floor(consumeData.data.hint_count)));
+          }
+          setMessage({
+            text: 'No hints left.',
+            className: 'text-amber-300',
+          });
+          setTimeout(() => setMessage(null), 1800);
+          return;
+        }
+
+        if (typeof consumeData?.data?.hint_count === 'number') {
+          setHintCount(Math.max(0, Math.floor(consumeData.data.hint_count)));
+        } else {
+          setHintCount(prev => Math.max(0, prev - 1));
+        }
       }
 
       const hint = getHintMove(state);
@@ -454,7 +632,50 @@ export default function GamePage({ token, username }: Props) {
     } finally {
       setHintLoading(false);
     }
-  }, [hintCount, hintLoading, state, token]);
+  }, [consumePortalHint, hintConfirmSubmitting, hintLoading, portalApiBase, portalToken, redeemPortalHint, state, token]);
+
+  const handleHint = useCallback(async () => {
+    if (!token || !state.isPlaying || hintLoading || hintConfirmSubmitting) return;
+    if (!portalToken) {
+      await executeHint();
+      return;
+    }
+
+    const base = normalizeApiBase(portalApiBase || process.env.NEXT_PUBLIC_PORTAL_API_BASE || '');
+    if (!base) {
+      await executeHint();
+      return;
+    }
+
+    setHintConfirmOpen(true);
+    setHintConfirmLoading(true);
+    setHintConfirmError(null);
+    try {
+      const assets = await getPortalAssets(base);
+      if (!assets) {
+        setPortalAssets(null);
+        setHintConfirmError('Failed to load assets.');
+      } else {
+        setPortalAssets(assets);
+      }
+    } catch {
+      setPortalAssets(null);
+      setHintConfirmError('Failed to load assets.');
+    } finally {
+      setHintConfirmLoading(false);
+    }
+  }, [executeHint, getPortalAssets, hintConfirmSubmitting, hintLoading, portalApiBase, portalToken, state.isPlaying, token]);
+
+  const confirmHintExchange = useCallback(async () => {
+    if (hintConfirmSubmitting || hintConfirmLoading) return;
+    setHintConfirmSubmitting(true);
+    try {
+      await executeHint();
+      setHintConfirmOpen(false);
+    } finally {
+      setHintConfirmSubmitting(false);
+    }
+  }, [executeHint, hintConfirmLoading, hintConfirmSubmitting]);
 
   const isHomeView = modalType === 'mode';
 
@@ -498,6 +719,41 @@ export default function GamePage({ token, username }: Props) {
             history={state.history}
           />
           <Board state={state} onMove={handleMove} shake={shake} hintTarget={hintTarget} />
+          {hintConfirmOpen && (
+            <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 px-4">
+              <div className="w-full max-w-md rounded-2xl border border-slate-600 bg-slate-900/95 p-5 text-white shadow-2xl">
+                <h3 className="text-xl font-bold mb-2">Use Hint</h3>
+                <p className="text-slate-300 mb-3">Cost: {HINT_PRICE_COINS} coins</p>
+                {hintConfirmLoading ? (
+                  <p className="text-slate-300">Loading assets...</p>
+                ) : (
+                  <div className="space-y-1 text-sm text-slate-200 mb-3">
+                    <p>Coins: {portalAssets?.coins ?? '-'}</p>
+                    <p>Diamonds: {portalAssets?.diamonds ?? '-'}</p>
+                    <p>Flowers: {portalAssets?.flowers ?? '-'}</p>
+                  </div>
+                )}
+                {hintConfirmError && <p className="text-rose-300 text-sm mb-3">{hintConfirmError}</p>}
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setHintConfirmOpen(false)}
+                    className="px-4 py-2 rounded-lg border border-slate-500 bg-slate-700/80 hover:bg-slate-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmHintExchange}
+                    disabled={hintConfirmLoading || hintConfirmSubmitting || !!hintConfirmError}
+                    className="px-4 py-2 rounded-lg border border-amber-500 bg-amber-700/80 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {hintConfirmSubmitting ? 'Processing...' : 'Confirm'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {message && (
             <div
               className={`absolute inset-0 flex items-center justify-center pointer-events-none z-50 transition-opacity duration-300 ${message.className}`}
@@ -543,4 +799,3 @@ export default function GamePage({ token, username }: Props) {
     </div>
   );
 }
-
