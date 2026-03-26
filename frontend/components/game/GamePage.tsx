@@ -128,7 +128,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardMode, setLeaderboardMode] = useState<LeaderboardMode>('classic');
-  const [hintCount, setHintCount] = useState(1);
+  const [hintCount, setHintCount] = useState(0);
   const [hintLoading, setHintLoading] = useState(false);
   const [hintConfirmOpen, setHintConfirmOpen] = useState(false);
   const [hintConfirmLoading, setHintConfirmLoading] = useState(false);
