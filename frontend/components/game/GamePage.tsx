@@ -541,8 +541,8 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     [portalToken]
   );
 
-  const executeHint = useCallback(async () => {
-    if (!token || !state.isPlaying || hintLoading || hintConfirmSubmitting) return;
+  const executeHint = useCallback(async (allowAutoRedeem: boolean): Promise<boolean> => {
+    if (!token || !state.isPlaying || hintLoading || hintConfirmSubmitting) return false;
     setHintLoading(true);
     try {
       let consumed = false;
@@ -558,7 +558,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
             } else {
               setHintCount(prev => Math.max(0, prev - 1));
             }
-          } else if (consumeResult.status === 'no_inventory') {
+          } else if (consumeResult.status === 'no_inventory' && allowAutoRedeem) {
             setHintCount(0);
             const redeemResult = await redeemPortalHint(base);
             if (redeemResult.status === 'success') {
@@ -580,8 +580,11 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
                 className: 'text-amber-300',
               });
               setTimeout(() => setMessage(null), 2200);
-              return;
+              return false;
             }
+          } else if (consumeResult.status === 'no_inventory' && !allowAutoRedeem) {
+            setHintCount(0);
+            return false;
           }
         }
       }
@@ -601,7 +604,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
             className: 'text-amber-300',
           });
           setTimeout(() => setMessage(null), 1800);
-          return;
+          return false;
         }
 
         if (typeof consumeData?.data?.hint_count === 'number') {
@@ -622,6 +625,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
         });
         setTimeout(() => setMessage(null), 2400);
       }
+      return true;
     } catch {
       setHintTarget(null);
       setMessage({
@@ -629,6 +633,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
         className: 'text-rose-300',
       });
       setTimeout(() => setMessage(null), 2000);
+      return false;
     } finally {
       setHintLoading(false);
     }
@@ -637,13 +642,34 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
   const handleHint = useCallback(async () => {
     if (!token || !state.isPlaying || hintLoading || hintConfirmSubmitting) return;
     if (!portalToken) {
-      await executeHint();
+      if (hintCount <= 0) {
+        setMessage({
+          text: 'No hints left.',
+          className: 'text-amber-300',
+        });
+        setTimeout(() => setMessage(null), 1800);
+        return;
+      }
+      await executeHint(false);
       return;
     }
 
     const base = normalizeApiBase(portalApiBase || process.env.NEXT_PUBLIC_PORTAL_API_BASE || '');
     if (!base) {
-      await executeHint();
+      if (hintCount <= 0) {
+        setMessage({
+          text: 'No hints left.',
+          className: 'text-amber-300',
+        });
+        setTimeout(() => setMessage(null), 1800);
+        return;
+      }
+      await executeHint(false);
+      return;
+    }
+
+    if (hintCount > 0) {
+      await executeHint(false);
       return;
     }
 
@@ -664,14 +690,16 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     } finally {
       setHintConfirmLoading(false);
     }
-  }, [executeHint, getPortalAssets, hintConfirmSubmitting, hintLoading, portalApiBase, portalToken, state.isPlaying, token]);
+  }, [executeHint, getPortalAssets, hintConfirmSubmitting, hintCount, hintLoading, portalApiBase, portalToken, state.isPlaying, token]);
 
   const confirmHintExchange = useCallback(async () => {
     if (hintConfirmSubmitting || hintConfirmLoading) return;
     setHintConfirmSubmitting(true);
     try {
-      await executeHint();
-      setHintConfirmOpen(false);
+      const ok = await executeHint(true);
+      if (ok) {
+        setHintConfirmOpen(false);
+      }
     } finally {
       setHintConfirmSubmitting(false);
     }
