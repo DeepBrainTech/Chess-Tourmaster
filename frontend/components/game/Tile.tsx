@@ -68,13 +68,13 @@ export default function Tile({
         }
       }}
     >
-      {showQuestValue && tile.piece && (
+      {showQuestValue && !isKnight && tile.piece && (
         <i
           className={`fas ${PIECE_ICON[tile.piece]} absolute ${PIECE_SIZE} drop-shadow-md ${visited ? 'opacity-50 text-slate-400' : (tile.tileMultiplier ?? 1) > 1 ? 'text-lime-400' : (tile.value ?? 0) < 0 ? 'text-rose-400' : 'text-amber-300'}`}
           aria-hidden
         />
       )}
-      {showQuestValue && !visited && ((tile.tileMultiplier ?? 1) > 1 || (tile.value ?? 0) !== 0) && (
+      {showQuestValue && !isKnight && !visited && ((tile.tileMultiplier ?? 1) > 1 || (tile.value ?? 0) !== 0) && (
         <span className={`quest-value absolute top-1 right-2 font-bold text-xs sm:text-sm drop-shadow-md ${(tile.tileMultiplier ?? 1) > 1 ? 'text-lime-400' : (tile.value ?? 0) < 0 ? 'text-rose-400' : 'text-amber-300'}`}>
           {(tile.tileMultiplier ?? 1) > 1 ? `x${tile.tileMultiplier}` : `${(tile.value ?? 0) >= 0 ? '+' : ''}${tile.value}`}
         </span>
