@@ -779,6 +779,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
       <MainModal
         type={modalType}
         gameMode={state.gameMode}
+        startLevel={state.maxUnlockedLevel}
         winData={winData}
         username={username}
         leaderboard={leaderboard}
@@ -790,7 +791,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
           setModalType('leaderboard');
         }}
         onChangeLeaderboardMode={setLeaderboardMode}
-        onStartLevel={() => startLevel(1, false)}
+        onStartLevel={() => startLevel(state.maxUnlockedLevel, false)}
         onNextLevel={nextLevel}
         onRetry={restartLevel}
         onCloseOverlay={() => setModalType(modalType === 'leaderboard' ? 'mode' : 'none')}

@@ -24,6 +24,7 @@ type LeaderboardMode = 'classic' | 'math_tour';
 type Props = {
   type: ModalType;
   gameMode: 'classic' | 'math_tour';
+  startLevel: number;
   winData: WinData | null;
   username?: string;
   leaderboard: LeaderboardEntry[];
@@ -52,6 +53,7 @@ const THEME_BUTTONS: { name: ThemeName; label: string; btnClass: string }[] = [
 export default function MainModal({
   type,
   gameMode,
+  startLevel,
   winData,
   username,
   leaderboard,
@@ -305,7 +307,7 @@ export default function MainModal({
               onClick={onStartLevel}
               className="w-full bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 text-white font-bold py-3 rounded-xl shadow-lg transition transform hover:scale-105"
             >
-              Start Level 1
+              {`Start Level ${startLevel}`}
             </button>
           </>
         )}
