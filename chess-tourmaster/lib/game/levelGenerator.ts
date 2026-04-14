@@ -2,7 +2,6 @@ import type { GameMode } from './types';
 import type { LevelConfig, TileData } from './types';
 import { MATH_PIECE_CONFIG, type MathPiece } from './types';
 
-const MATH_PIECES: MathPiece[] = ['pawn', 'knight', 'bishop', 'rook', 'queen'];
 /** 权重: pawn 多, queen 少，保证 requiredScore 可达成 */
 function pickRandomMathPiece(rng: () => number): MathPiece {
   const roll = rng();
@@ -121,10 +120,10 @@ export function generateLevelConfig(levelNum: number, gameMode: GameMode): Level
     else if (levelNum === 3) maxPathLength = 12;
     else if (levelNum === 4) maxPathLength = 18;
 
-    let cr = Math.floor(rng() * size);
-    let cc = Math.floor(rng() * size);
+    const cr = Math.floor(rng() * size);
+    const cc = Math.floor(rng() * size);
     config.kingPos = { r: cr, c: cc };
-    let path = [{ r: cr, c: cc }];
+    const path = [{ r: cr, c: cc }];
     grid[cr][cc] = 1;
     let curr = { r: cr, c: cc };
     let attempts = 1000;
@@ -169,7 +168,7 @@ export function generateLevelConfig(levelNum: number, gameMode: GameMode): Level
         const isStart = r === config.knightPos.r && c === config.knightPos.c;
         const isKing = r === config.kingPos.r && c === config.kingPos.c;
         let hasFire = false;
-        let value = 0;
+        const value = 0;
         let tileMultiplier: number | undefined;
         if (isPath && !isStart && !isKing) {
           tilesToVisit++;

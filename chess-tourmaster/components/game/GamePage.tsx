@@ -85,8 +85,19 @@ function normalizeApiBase(input: string | null | undefined): string {
   return input.replace(/\/+$/, '');
 }
 
-function extractPortalErrorCode(data: any): PortalErrorCode | null {
-  const raw = data?.detail ?? data?.code ?? data?.error_code ?? data?.error?.code;
+function extractPortalErrorCode(data: unknown): PortalErrorCode | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const source = data as {
+    detail?: unknown;
+    code?: unknown;
+    error_code?: unknown;
+    error?: { code?: unknown } | unknown;
+  };
+  const nestedError =
+    typeof source.error === 'object' && source.error !== null
+      ? (source.error as { code?: unknown })
+      : undefined;
+  const raw = source.detail ?? source.code ?? source.error_code ?? nestedError?.code;
   if (typeof raw !== 'string') return null;
   const code = raw.trim();
   if (
@@ -228,8 +239,13 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
         return;
       }
       const parsed = data.data
-        .filter((item: any) => item && typeof item.username === 'string')
-        .map((item: any, index: number) => ({
+        .filter(
+          (item: unknown): item is { username: string; rank?: unknown; total_levels?: unknown } =>
+            typeof item === 'object' &&
+            item !== null &&
+            typeof (item as { username?: unknown }).username === 'string'
+        )
+        .map((item: { username: string; rank?: unknown; total_levels?: unknown }, index: number) => ({
           rank: typeof item.rank === 'number' ? item.rank : index + 1,
           username: item.username,
           total_levels: normalizeUnlockedLevel(item.total_levels),

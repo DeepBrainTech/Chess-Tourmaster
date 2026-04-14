@@ -3,6 +3,15 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { jsonResponse, optionsResponse } from '@/lib/http';
 
+type LevelStatSummary = {
+  level: number;
+  attempts: number;
+  best_moves: number;
+  best_time: number;
+  total_stars: number;
+  best_stars: number;
+};
+
 /**
  * 获取用户的关卡统计数据
  * GET /api/levels/stats?level=1
@@ -57,7 +66,7 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
       });
 
       // 按关卡分组统计
-      const levelStats = allRecords.reduce((acc: any, record) => {
+      const levelStats = allRecords.reduce<Record<number, LevelStatSummary>>((acc, record) => {
         if (!acc[record.level]) {
           acc[record.level] = {
             level: record.level,

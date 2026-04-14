@@ -20,7 +20,6 @@ type Props = {
   isHintTarget: boolean;
   onClick: () => void;
   showQuestValue?: boolean;
-  scoreMultiplier?: number;
 };
 
 export default function Tile({
@@ -30,7 +29,6 @@ export default function Tile({
   isHintTarget,
   onClick,
   showQuestValue = false,
-  scoreMultiplier = 1,
 }: Props) {
   const isVoid = tile.type === 'void';
   const isKing = tile.type === 'king';

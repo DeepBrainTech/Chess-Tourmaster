@@ -48,7 +48,6 @@ export default function Board({ state, onMove, shake, hintTarget }: Props) {
               isHintTarget={isHintTarget}
               onClick={() => onMove(r, c)}
               showQuestValue={state.gameMode === 'math_tour'}
-              scoreMultiplier={state.scoreMultiplier}
             />
           );
         })
