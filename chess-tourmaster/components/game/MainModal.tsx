@@ -7,9 +7,6 @@ type WinData = {
   time: string;
   stars: number;
   isFinalLevel: boolean;
-  levelBonus?: number;
-  streakBonus?: number;
-  totalScore?: number;
   isNewHighScore?: boolean;
   baseScore?: number;
 };

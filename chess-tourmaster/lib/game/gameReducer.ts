@@ -12,10 +12,8 @@ export type GameAction =
   | { type: 'SET_MAX_UNLOCKED_LEVEL'; payload: number }
   | { type: 'SET_LEVEL_STARS'; payload: Record<number, number> }
   | { type: 'UPSERT_LEVEL_STAR'; payload: { level: number; stars: number } }
-  | { type: 'WIN_LEVEL'; payload: { levelBonus: number; streakBonus: number } }
-  | { type: 'LOSE_LEVEL' }
-  | { type: 'RESET_RUN' }
-  | { type: 'PREPARE_RETRY' };
+  | { type: 'WIN_LEVEL' }
+  | { type: 'LOSE_LEVEL' };
 
 const deepCopyGrid = (grid: GameState['grid']) =>
   grid.map(row => row.map(tile => ({ ...tile })));
@@ -37,9 +35,6 @@ export const initialGameState: GameState = {
   requiredScore: 0,
   scoreMultiplier: 1,
   savedGridConfig: null,
-  currentRunScore: 0,
-  cumulativeBaseScore: 0,
-  streak: 0,
   gameStartTime: 0,
   gameTimeSeconds: 0,
   theme: THEME_CLASSES.cosmic,
@@ -54,9 +49,6 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         level: 1,
         maxUnlockedLevel: 1,
         levelStars: {},
-        currentRunScore: 0,
-        cumulativeBaseScore: 0,
-        streak: 0,
         savedGridConfig: null,
         scoreMultiplier: 1,
       };
@@ -124,6 +116,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const multiplierAfterMove = 1;
 
       const newGrid = deepCopyGrid(state.grid);
+      // Extinguish fire on the tile we are leaving.
+      if (newGrid[curr.r]?.[curr.c]?.hasFire) {
+        newGrid[curr.r][curr.c] = { ...newGrid[curr.r][curr.c], hasFire: false };
+      }
+      // Keep fire on the tile we just landed on so 3s timer can run.
       const newTile = { ...newGrid[r][c], visited: true };
       if (isMathTour) newTile.value = 0;
       newGrid[r][c] = newTile;
@@ -172,46 +169,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
 
-    case 'WIN_LEVEL': {
-      const { levelBonus, streakBonus } = action.payload;
-      const newCumulative = state.cumulativeBaseScore + levelBonus;
-      const newStreak = state.streak + 1;
-      const newRunScore = state.currentRunScore + levelBonus + streakBonus;
+    case 'WIN_LEVEL':
       return {
         ...state,
         isPlaying: false,
-        currentRunScore: newRunScore,
-        cumulativeBaseScore: newCumulative,
-        streak: newStreak,
       };
-    }
 
     case 'LOSE_LEVEL':
       return {
         ...state,
         isPlaying: false,
-        currentRunScore: state.cumulativeBaseScore,
-        streak: 0,
-      };
-
-    case 'RESET_RUN':
-      return {
-        ...state,
-        currentRunScore: 0,
-        cumulativeBaseScore: 0,
-        streak: 0,
-        savedGridConfig: null,
       };
 
     case 'SET_SAVED_CONFIG':
       return { ...state, savedGridConfig: action.payload };
-
-    case 'PREPARE_RETRY':
-      return {
-        ...state,
-        currentRunScore: state.cumulativeBaseScore,
-        streak: 0,
-      };
 
     default:
       return state;
@@ -248,4 +219,20 @@ export function isStuck(state: GameState): boolean {
     return true;
   });
   return !canReach;
+}
+
+export function isKingAccessExhausted(state: GameState): boolean {
+  const canCaptureKingNow = getValidMoves(state.knightPos.r, state.knightPos.c, state.gridSizeVal).some(
+    (m) => m.r === state.kingPos.r && m.c === state.kingPos.c
+  ) && canMoveToKing(state);
+  if (canCaptureKingNow) return false;
+
+  const kingApproachTiles = getValidMoves(state.kingPos.r, state.kingPos.c, state.gridSizeVal);
+  const hasAvailableApproach = kingApproachTiles.some((m) => {
+    const tile = state.grid[m.r]?.[m.c];
+    if (!tile) return false;
+    if (tile.type === 'void' || tile.type === 'king') return false;
+    return !tile.visited;
+  });
+  return !hasAvailableApproach;
 }

@@ -9,7 +9,7 @@ import { addHintCount, ensureUserHint } from '@/lib/userHint';
  * POST /api/progress/save
  * Body: {
  *   total_levels?: number,
- *   level_data?: { level, moves_count, time_seconds, stars, score, game_mode }
+ *   level_data?: { level, moves_count, time_seconds, stars, game_mode }
  * }
  */
 export const POST = requireAuth(async (request: NextRequest, payload) => {

@@ -66,9 +66,6 @@ export interface GameState {
   requiredScore: number;
   scoreMultiplier: number;
   savedGridConfig: LevelConfig | null;
-  currentRunScore: number;
-  cumulativeBaseScore: number;
-  streak: number;
   gameStartTime: number;
   gameTimeSeconds: number;
   theme: string;

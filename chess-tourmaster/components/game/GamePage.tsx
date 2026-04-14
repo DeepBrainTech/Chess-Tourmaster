@@ -7,6 +7,7 @@ import {
   initialGameState,
   canMoveToKing,
   isStuck,
+  isKingAccessExhausted,
 } from '@/lib/game/gameReducer';
 import { getFixedLevelConfig, MAX_LEVELS } from '@/lib/game/levelCatalog';
 import {
@@ -29,9 +30,6 @@ type WinData = {
   time: string;
   stars: number;
   isFinalLevel: boolean;
-  levelBonus?: number;
-  streakBonus?: number;
-  totalScore?: number;
   isNewHighScore?: boolean;
   baseScore?: number;
 };
@@ -202,7 +200,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
   const saveProgress = useCallback(
     async (
       maxUnlockedLevel: number,
-      levelData?: { level: number; moves_count: number; time_seconds: number; score: number; stars: number; game_mode: 'classic' | 'math_tour' }
+      levelData?: { level: number; moves_count: number; time_seconds: number; stars: number; game_mode: 'classic' | 'math_tour' }
     ) => {
       if (!token) return;
       try {
@@ -313,10 +311,10 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     }
   }, [state.isPlaying, state.knightPos, state.grid]);
 
-  // Stuck check after move
+  // Stuck check after move / no remaining king approach tiles
   useEffect(() => {
     if (!state.isPlaying || state.grid.length === 0) return;
-    if (isStuck(state)) {
+    if (isStuck(state) || isKingAccessExhausted(state)) {
       const t = setTimeout(() => {
         setModalType('lose');
         dispatch({ type: 'LOSE_LEVEL' });
@@ -400,32 +398,22 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
       if (elapsed <= state.parTime) stars = 3;
       else if (elapsed <= state.parTime * 1.5) stars = 2;
     }
-    const levelBonus = Math.floor(Math.random() * 501) + 500;
-    const streakBonus = state.streak * 100;
     const nextUnlockedLevel = Math.min(MAX_LEVELS, Math.max(state.maxUnlockedLevel, state.level + 1));
-    const runScoreAfterWin = state.currentRunScore + levelBonus + streakBonus;
     await saveProgress(nextUnlockedLevel, {
       level: state.level,
       moves_count: state.history.length,
       time_seconds: state.gameTimeSeconds,
-      score: runScoreAfterWin,
       stars,
       game_mode: state.gameMode,
     });
     dispatch({ type: 'SET_MAX_UNLOCKED_LEVEL', payload: nextUnlockedLevel });
     dispatch({ type: 'UPSERT_LEVEL_STAR', payload: { level: state.level, stars } });
-    dispatch({
-      type: 'WIN_LEVEL',
-      payload: { levelBonus, streakBonus },
-    });
+    dispatch({ type: 'WIN_LEVEL' });
     setWinData({
       level: state.level,
       time: formatTime(state.gameTimeSeconds),
       stars,
       isFinalLevel: state.level >= MAX_LEVELS,
-      levelBonus,
-      streakBonus,
-      totalScore: runScoreAfterWin,
     });
     setHintTarget(null);
     setModalType('win');
@@ -435,9 +423,6 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     (level: number, useSaved: boolean) => {
       initSound();
       wonByCaptureRef.current = false;
-      if (level === 1) {
-        dispatch({ type: 'RESET_RUN' });
-      }
       let config;
       if (useSaved && state.savedGridConfig && state.savedGridConfig.level === level) {
         config = state.savedGridConfig;
@@ -465,7 +450,6 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
   const restartLevel = useCallback(() => {
     const saved = state.savedGridConfig;
     if (!saved) return;
-    dispatch({ type: 'PREPARE_RETRY' });
     dispatch({ type: 'START_LEVEL', payload: saved });
     setHintTarget(null);
     setModalType('none');
