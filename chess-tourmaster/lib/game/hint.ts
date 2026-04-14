@@ -56,8 +56,6 @@ function getClassicHintMove(state: GameState): HintResult {
     }
   }
 
-  const memo = new Map<string, boolean>();
-
   function tileIsReachable(pos: Pos, mask: bigint): 'king' | 'target' | 'blocked' {
     const tile = state.grid[pos.r]?.[pos.c];
     if (!tile || tile.type === 'void') return 'blocked';
@@ -76,39 +74,76 @@ function getClassicHintMove(state: GameState): HintResult {
     return count;
   }
 
-  function canWinFrom(pos: Pos, mask: bigint): boolean {
-    const memoKey = `${pos.r},${pos.c}|${mask.toString()}`;
-    const cached = memo.get(memoKey);
-    if (cached != null) return cached;
-
-    if (mask === 0n) {
-      const canCaptureKingNow = nextKnightMoves(pos, size).some(
-        move => move.r === king.r && move.c === king.c
-      );
-      memo.set(memoKey, canCaptureKingNow);
-      return canCaptureKingNow;
+  function bitCount(mask: bigint): number {
+    let count = 0;
+    let current = mask;
+    while (current !== 0n) {
+      current &= current - 1n;
+      count++;
     }
+    return count;
+  }
 
-    const candidates: Array<{ pos: Pos; nextMask: bigint }> = [];
-    for (const move of nextKnightMoves(pos, size)) {
-      if (tileIsReachable(move, mask) !== 'target') continue;
-      const idx = indexByPos.get(toKey(move));
-      if (idx == null) continue;
-      const bit = 1n << BigInt(idx);
-      candidates.push({ pos: move, nextMask: mask & ~bit });
-    }
-
-    candidates.sort((a, b) => onwardCount(a.pos, a.nextMask) - onwardCount(b.pos, b.nextMask));
-
-    for (const candidate of candidates) {
-      if (canWinFrom(candidate.pos, candidate.nextMask)) {
-        memo.set(memoKey, true);
-        return true;
+  function knightDistanceToKing(start: Pos): number {
+    if (start.r === king.r && start.c === king.c) return 0;
+    const visited = Array.from({ length: size }, () => Array<boolean>(size).fill(false));
+    const queue: Array<{ pos: Pos; dist: number }> = [{ pos: start, dist: 0 }];
+    visited[start.r][start.c] = true;
+    for (let head = 0; head < queue.length; head++) {
+      const { pos, dist } = queue[head];
+      for (const move of nextKnightMoves(pos, size)) {
+        if (visited[move.r][move.c]) continue;
+        if (move.r === king.r && move.c === king.c) return dist + 1;
+        visited[move.r][move.c] = true;
+        queue.push({ pos: move, dist: dist + 1 });
       }
     }
+    return Number.MAX_SAFE_INTEGER;
+  }
 
-    memo.set(memoKey, false);
-    return false;
+  function candidateScore(candidate: { pos: Pos; nextMask: bigint }): [number, number, number] {
+    const reachesKingAfterClear =
+      candidate.nextMask === 0n &&
+      nextKnightMoves(candidate.pos, size).some(move => move.r === king.r && move.c === king.c)
+        ? 0
+        : 1;
+    const onward = onwardCount(candidate.pos, candidate.nextMask);
+    const distToKing = knightDistanceToKing(candidate.pos);
+    return [reachesKingAfterClear, onward, distToKing];
+  }
+
+  function sortCandidates(candidates: Array<{ pos: Pos; nextMask: bigint }>): void {
+    candidates.sort((a, b) => {
+      const sa = candidateScore(a);
+      const sb = candidateScore(b);
+      if (sa[0] !== sb[0]) return sa[0] - sb[0];
+      if (sa[1] !== sb[1]) return sa[1] - sb[1];
+      return sa[2] - sb[2];
+    });
+  }
+
+  function runGreedySimulation(startPos: Pos, startMask: bigint): boolean {
+    let pos = startPos;
+    let mask = startMask;
+    let guard = bitCount(mask) + 2;
+
+    while (guard-- > 0 && mask !== 0n) {
+      const nextCandidates: Array<{ pos: Pos; nextMask: bigint }> = [];
+      for (const move of nextKnightMoves(pos, size)) {
+        if (tileIsReachable(move, mask) !== 'target') continue;
+        const idx = indexByPos.get(toKey(move));
+        if (idx == null) continue;
+        const bit = 1n << BigInt(idx);
+        nextCandidates.push({ pos: move, nextMask: mask & ~bit });
+      }
+      if (nextCandidates.length === 0) return false;
+      sortCandidates(nextCandidates);
+      pos = nextCandidates[0].pos;
+      mask = nextCandidates[0].nextMask;
+    }
+
+    if (mask !== 0n) return false;
+    return nextKnightMoves(pos, size).some(move => move.r === king.r && move.c === king.c);
   }
 
   const firstMoves: Array<{ pos: Pos; nextMask: bigint }> = [];
@@ -125,12 +160,16 @@ function getClassicHintMove(state: GameState): HintResult {
     }
   }
 
-  firstMoves.sort((a, b) => onwardCount(a.pos, a.nextMask) - onwardCount(b.pos, b.nextMask));
+  sortCandidates(firstMoves);
 
   for (const candidate of firstMoves) {
-    if (canWinFrom(candidate.pos, candidate.nextMask)) {
+    if (runGreedySimulation(candidate.pos, candidate.nextMask)) {
       return { type: 'next_move', move: candidate.pos };
     }
+  }
+
+  if (firstMoves.length > 0) {
+    return { type: 'next_move', move: firstMoves[0].pos };
   }
 
   return { type: 'no_win_path' };
