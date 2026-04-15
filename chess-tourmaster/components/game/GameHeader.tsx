@@ -119,20 +119,32 @@ export default function GameHeader({
           onClick={onUndo}
           disabled={!canUndo || undoLoading}
           className="bg-slate-700/80 hover:bg-slate-600 text-white px-2 lg:px-3 py-2 lg:py-3 rounded-lg shadow-lg border border-slate-500 disabled:opacity-40 disabled:cursor-not-allowed"
-          title={`Undo (${undoCount})`}
+          title={`Undo (${undoCount > 0 ? undoCount : 'coins'})`}
         >
           <i className="fas fa-undo mr-1" />
-          {undoLoading ? '...' : undoCount}
+          {undoLoading ? (
+            '...'
+          ) : undoCount > 0 ? (
+            undoCount
+          ) : (
+            <i className="fas fa-coins text-amber-300" aria-label="Use coins" />
+          )}
         </button>
         <button
           type="button"
           onClick={onHint}
           disabled={hintLoading}
           className="bg-amber-700/80 hover:bg-amber-600 text-white px-2 lg:px-3 py-2 lg:py-3 rounded-lg shadow-lg border border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          title={`Hint (${hintCount})`}
+          title={`Hint (${hintCount > 0 ? hintCount : 'coins'})`}
         >
           <i className="fas fa-lightbulb mr-1" />
-          {hintLoading ? '...' : hintCount}
+          {hintLoading ? (
+            '...'
+          ) : hintCount > 0 ? (
+            hintCount
+          ) : (
+            <i className="fas fa-coins text-amber-300" aria-label="Use coins" />
+          )}
         </button>
         <button
           type="button"
