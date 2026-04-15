@@ -23,6 +23,10 @@ type Props = {
   tilesLeft: number;
   onSelectLevel: (level: number) => void;
   onRestart: () => void;
+  onUndo: () => void;
+  canUndo: boolean;
+  undoCount: number;
+  undoLoading: boolean;
   onHint: () => void;
   hintCount: number;
   hintLoading: boolean;
@@ -45,6 +49,10 @@ export default function GameHeader({
   tilesLeft,
   onSelectLevel,
   onRestart,
+  onUndo,
+  canUndo,
+  undoCount,
+  undoLoading,
   onHint,
   hintCount,
   hintLoading,
@@ -105,6 +113,16 @@ export default function GameHeader({
           title="Restart"
         >
           <i className="fas fa-redo" />
+        </button>
+        <button
+          type="button"
+          onClick={onUndo}
+          disabled={!canUndo || undoLoading}
+          className="bg-slate-700/80 hover:bg-slate-600 text-white px-2 lg:px-3 py-2 lg:py-3 rounded-lg shadow-lg border border-slate-500 disabled:opacity-40 disabled:cursor-not-allowed"
+          title={`Undo (${undoCount})`}
+        >
+          <i className="fas fa-undo mr-1" />
+          {undoLoading ? '...' : undoCount}
         </button>
         <button
           type="button"

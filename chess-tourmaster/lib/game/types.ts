@@ -45,6 +45,7 @@ export interface HistoryEntry {
   scoreCollected: number;
   valueRestored: number;
   multiplierUsed: number;
+  extinguishedFire?: boolean;
   /** Math Tour: 格子乘数 2/3 表示 x2/x3，1 表示加减格 */
   tileMultiplier?: number;
 }

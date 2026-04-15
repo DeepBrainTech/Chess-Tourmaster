@@ -7,6 +7,7 @@ export type GameAction =
   | { type: 'START_LEVEL'; payload: LevelConfig }
   | { type: 'SET_SAVED_CONFIG'; payload: LevelConfig | null }
   | { type: 'MOVE'; payload: { r: number; c: number } }
+  | { type: 'UNDO' }
   | { type: 'SET_GAME_TIME'; payload: number }
   | { type: 'SET_THEME'; payload: ThemeName }
   | { type: 'SET_MAX_UNLOCKED_LEVEL'; payload: number }
@@ -93,6 +94,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           scoreCollected: 0,
           valueRestored: 0,
           multiplierUsed: state.scoreMultiplier,
+          extinguishedFire: false,
         };
         return {
           ...state,
@@ -116,8 +118,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const multiplierAfterMove = 1;
 
       const newGrid = deepCopyGrid(state.grid);
+      const extinguishedFire = Boolean(newGrid[curr.r]?.[curr.c]?.hasFire);
       // Extinguish fire on the tile we are leaving.
-      if (newGrid[curr.r]?.[curr.c]?.hasFire) {
+      if (extinguishedFire) {
         newGrid[curr.r][curr.c] = { ...newGrid[curr.r][curr.c], hasFire: false };
       }
       // Keep fire on the tile we just landed on so 3s timer can run.
@@ -131,6 +134,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         scoreCollected: finalScore,
         valueRestored: collectedValue,
         multiplierUsed,
+        extinguishedFire,
         tileMultiplier: targetTile.tileMultiplier ?? 1,
       };
 
@@ -142,6 +146,52 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         tilesLeft: state.tilesLeft - 1,
         currentScore: state.currentScore + finalScore,
         scoreMultiplier: multiplierAfterMove,
+      };
+    }
+
+    case 'UNDO': {
+      if (state.history.length === 0) return state;
+      const lastEntry = state.history[state.history.length - 1];
+      const isKingCaptureMove = lastEntry.prevPos.r === state.kingPos.r && lastEntry.prevPos.c === state.kingPos.c;
+      const newHistory = state.history.slice(0, -1);
+
+      if (isKingCaptureMove) {
+        return {
+          ...state,
+          knightPos: { ...lastEntry.knightPos },
+          history: newHistory,
+          isPlaying: true,
+        };
+      }
+
+      const restoredGrid = deepCopyGrid(state.grid);
+      const landingTile = restoredGrid[lastEntry.prevPos.r]?.[lastEntry.prevPos.c];
+      if (landingTile) {
+        restoredGrid[lastEntry.prevPos.r][lastEntry.prevPos.c] = {
+          ...landingTile,
+          visited: false,
+          value: state.gameMode === 'math_tour' ? lastEntry.valueRestored : landingTile.value,
+        };
+      }
+      if (lastEntry.extinguishedFire) {
+        const previousTile = restoredGrid[lastEntry.knightPos.r]?.[lastEntry.knightPos.c];
+        if (previousTile) {
+          restoredGrid[lastEntry.knightPos.r][lastEntry.knightPos.c] = {
+            ...previousTile,
+            hasFire: true,
+          };
+        }
+      }
+
+      return {
+        ...state,
+        grid: restoredGrid,
+        knightPos: { ...lastEntry.knightPos },
+        history: newHistory,
+        tilesLeft: state.tilesLeft + 1,
+        currentScore: state.currentScore - lastEntry.scoreCollected,
+        scoreMultiplier: lastEntry.multiplierUsed,
+        isPlaying: true,
       };
     }
 

@@ -67,9 +67,11 @@ type PortalAssets = {
   flowers: number;
 };
 type LeaderboardMode = 'classic' | 'math_tour';
+type ExchangeType = 'hint' | 'undo';
 const HINT_ITEM_ID = 'chess_tourmaster_hint';
 const HINT_GAME_MODE = 'chess-tourmaster';
 const HINT_PRICE_COINS = 5;
+const UNDO_ITEM_ID = 'chess_tourmaster_undo';
 type PortalErrorCode =
   | 'insufficient_assets'
   | 'insufficient_inventory'
@@ -138,10 +140,13 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardMode, setLeaderboardMode] = useState<LeaderboardMode>('classic');
   const [hintCount, setHintCount] = useState(0);
+  const [undoCount, setUndoCount] = useState(0);
   const [hintLoading, setHintLoading] = useState(false);
+  const [undoLoading, setUndoLoading] = useState(false);
   const [hintConfirmOpen, setHintConfirmOpen] = useState(false);
   const [hintConfirmLoading, setHintConfirmLoading] = useState(false);
   const [hintConfirmSubmitting, setHintConfirmSubmitting] = useState(false);
+  const [exchangeType, setExchangeType] = useState<ExchangeType>('hint');
   const [portalAssets, setPortalAssets] = useState<PortalAssets | null>(null);
   const [hintConfirmError, setHintConfirmError] = useState<string | null>(null);
   const [hintTarget, setHintTarget] = useState<{ r: number; c: number } | null>(null);
@@ -172,6 +177,9 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
       }
       if (progressData.success && typeof progressData.data?.hint_count === 'number') {
         setHintCount(Math.max(0, Math.floor(progressData.data.hint_count)));
+      }
+      if (progressData.success && typeof progressData.data?.undo_count === 'number') {
+        setUndoCount(Math.max(0, Math.floor(progressData.data.undo_count)));
       }
 
       const statsData = await statsRes.json();
@@ -218,6 +226,9 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
           const data = await res.json().catch(() => null);
           if (data?.success && typeof data.data?.hint_count === 'number') {
             setHintCount(Math.max(0, Math.floor(data.data.hint_count)));
+          }
+          if (data?.success && typeof data.data?.undo_count === 'number') {
+            setUndoCount(Math.max(0, Math.floor(data.data.undo_count)));
           }
         });
       } catch (e) {
@@ -455,6 +466,96 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     setModalType('none');
   }, [state.savedGridConfig]);
 
+  const undoMove = useCallback(async () => {
+    if (!token || undoLoading || state.history.length === 0 || !state.isPlaying) return;
+    if (undoCount <= 0) {
+      if (!portalToken) {
+        setMessage({
+          text: 'No undos left.',
+          className: 'text-amber-300',
+        });
+        setTimeout(() => setMessage(null), 1800);
+        return;
+      }
+      const base = normalizeApiBase(portalApiBase || process.env.NEXT_PUBLIC_PORTAL_API_BASE || '');
+      if (!base) {
+        setMessage({
+          text: 'No undos left.',
+          className: 'text-amber-300',
+        });
+        setTimeout(() => setMessage(null), 1800);
+        return;
+      }
+      setExchangeType('undo');
+      setHintConfirmOpen(true);
+      setHintConfirmLoading(true);
+      setHintConfirmError(null);
+      try {
+        const res = await fetch(`${base}/api/user/assets`, {
+          headers: {
+            Authorization: `Bearer ${portalToken}`,
+            'X-User-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+          },
+        });
+        const data = await res.json().catch(() => null);
+        const coins = data?.data?.coins;
+        const diamonds = data?.data?.diamonds;
+        const flowers = data?.data?.flowers;
+        if (typeof coins !== 'number' || typeof diamonds !== 'number' || typeof flowers !== 'number') {
+          setPortalAssets(null);
+          setHintConfirmError('Failed to load assets.');
+        } else {
+          setPortalAssets({
+            coins: Math.max(0, Math.floor(coins)),
+            diamonds: Math.max(0, Math.floor(diamonds)),
+            flowers: Math.max(0, Math.floor(flowers)),
+          });
+        }
+      } catch {
+        setPortalAssets(null);
+        setHintConfirmError('Failed to load assets.');
+      } finally {
+        setHintConfirmLoading(false);
+      }
+      return;
+    }
+    setUndoLoading(true);
+    try {
+      const useRes = await fetch(`${getApiBase()}/api/undo/use`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const useData = await useRes.json().catch(() => null);
+      if (!useData?.success) {
+        if (typeof useData?.data?.undo_count === 'number') {
+          setUndoCount(Math.max(0, Math.floor(useData.data.undo_count)));
+        }
+        setMessage({
+          text: 'No undos left.',
+          className: 'text-amber-300',
+        });
+        setTimeout(() => setMessage(null), 1800);
+        return;
+      }
+      if (typeof useData?.data?.undo_count === 'number') {
+        setUndoCount(Math.max(0, Math.floor(useData.data.undo_count)));
+      } else {
+        setUndoCount(prev => Math.max(0, prev - 1));
+      }
+      wonByCaptureRef.current = false;
+      setHintTarget(null);
+      dispatch({ type: 'UNDO' });
+    } catch {
+      setMessage({
+        text: 'Undo service unavailable.',
+        className: 'text-rose-300',
+      });
+      setTimeout(() => setMessage(null), 1800);
+    } finally {
+      setUndoLoading(false);
+    }
+  }, [portalApiBase, portalToken, state.history.length, state.isPlaying, token, undoCount, undoLoading]);
+
   const setMode = useCallback((mode: 'classic' | 'math_tour') => {
     dispatch({ type: 'SET_MODE', payload: mode });
     setHintTarget(null);
@@ -470,38 +571,6 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
       startLevel(level, false);
     },
     [state.level, state.maxUnlockedLevel, startLevel]
-  );
-
-  const redeemPortalHint = useCallback(
-    async (base: string) => {
-      if (!portalToken) return { status: 'error' as const, errorCode: 'AUTH_REQUIRED' as PortalErrorCode };
-      const res = await fetch(
-        `${base}/api/user/shop/redeem?item_id=${encodeURIComponent(HINT_ITEM_ID)}&game_mode=${encodeURIComponent(HINT_GAME_MODE)}`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${portalToken}`,
-            'X-User-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-          },
-        }
-      );
-      const data = await res.json().catch(() => null);
-      if (res.ok && data?.success) {
-        return {
-          status: 'success' as const,
-          inventoryQuantity:
-            typeof data?.data?.inventory_quantity === 'number'
-              ? Math.max(0, Math.floor(data.data.inventory_quantity))
-              : null,
-        };
-      }
-      const errorCode = extractPortalErrorCode(data);
-      if (errorCode === 'insufficient_assets') {
-        return { status: 'insufficient_assets' as const };
-      }
-      return { status: 'error' as const, errorCode };
-    },
-    [portalToken]
   );
 
   const getPortalAssets = useCallback(
@@ -629,12 +698,14 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     }
 
     if (hintCount <= 0) {
+      setExchangeType('hint');
       await openHintExchangeDialog(base);
       return;
     }
 
     const result = await executeHint();
     if (result === 'need_exchange') {
+      setExchangeType('hint');
       await openHintExchangeDialog(base);
       return;
     }
@@ -646,9 +717,29 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     if (!portalToken || !base || !token) return;
     setHintConfirmSubmitting(true);
     try {
-      const redeemResult = await redeemPortalHint(base);
+      const itemId = exchangeType === 'undo' ? UNDO_ITEM_ID : HINT_ITEM_ID;
+      const redeemRes = await fetch(
+        `${base}/api/user/shop/redeem?item_id=${encodeURIComponent(itemId)}&game_mode=${encodeURIComponent(HINT_GAME_MODE)}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${portalToken}`,
+            'X-User-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+          },
+        }
+      );
+      const redeemData = await redeemRes.json().catch(() => null);
+      const redeemResult = redeemRes.ok && redeemData?.success
+        ? { status: 'success' as const }
+        : {
+            status: extractPortalErrorCode(redeemData) === 'insufficient_assets'
+              ? 'insufficient_assets' as const
+              : 'error' as const,
+            errorCode: extractPortalErrorCode(redeemData),
+          };
       if (redeemResult.status === 'success') {
-        const grantRes = await fetch(`${getApiBase()}/api/hint/grant`, {
+        const grantEndpoint = exchangeType === 'undo' ? '/api/undo/grant' : '/api/hint/grant';
+        const grantRes = await fetch(`${getApiBase()}${grantEndpoint}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -657,10 +748,18 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
           body: JSON.stringify({ amount: 1 }),
         });
         const grantData = await grantRes.json().catch(() => null);
-        if (grantData?.success && typeof grantData?.data?.hint_count === 'number') {
-          setHintCount(Math.max(0, Math.floor(grantData.data.hint_count)));
+        if (exchangeType === 'undo') {
+          if (grantData?.success && typeof grantData?.data?.undo_count === 'number') {
+            setUndoCount(Math.max(0, Math.floor(grantData.data.undo_count)));
+          } else {
+            await loadProgress(state.gameMode);
+          }
         } else {
-          await loadProgress(state.gameMode);
+          if (grantData?.success && typeof grantData?.data?.hint_count === 'number') {
+            setHintCount(Math.max(0, Math.floor(grantData.data.hint_count)));
+          } else {
+            await loadProgress(state.gameMode);
+          }
         }
         setHintConfirmError(null);
         const assets = await getPortalAssets(base);
@@ -670,12 +769,12 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
       }
       const text = redeemResult.status === 'insufficient_assets'
         ? getPortalErrorMessage('insufficient_assets')
-        : getPortalErrorMessage(redeemResult.errorCode ?? null);
-      setHintConfirmError(text ?? 'Hint exchange failed.');
+        : getPortalErrorMessage('insufficient_inventory');
+      setHintConfirmError(text ?? `${exchangeType === 'undo' ? 'Undo' : 'Hint'} exchange failed.`);
     } finally {
       setHintConfirmSubmitting(false);
     }
-  }, [getPortalAssets, hintConfirmLoading, hintConfirmSubmitting, loadProgress, portalApiBase, portalToken, redeemPortalHint, state.gameMode, token]);
+  }, [exchangeType, getPortalAssets, hintConfirmLoading, hintConfirmSubmitting, loadProgress, portalApiBase, portalToken, state.gameMode, token]);
 
   const isHomeView = modalType === 'mode';
 
@@ -704,6 +803,10 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
             tilesLeft={state.tilesLeft}
             onSelectLevel={handleSelectLevel}
             onRestart={restartLevel}
+            onUndo={undoMove}
+            canUndo={state.history.length > 0 && state.isPlaying}
+            undoCount={undoCount}
+            undoLoading={undoLoading}
             onHint={handleHint}
             hintCount={hintCount}
             hintLoading={hintLoading}
@@ -722,7 +825,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
           {hintConfirmOpen && (
             <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 px-4">
               <div className="w-full max-w-md rounded-2xl border border-slate-600 bg-slate-900/95 p-5 text-white shadow-2xl">
-                <h3 className="text-xl font-bold mb-2">Use Hint</h3>
+                <h3 className="text-xl font-bold mb-2">{exchangeType === 'undo' ? 'Use Undo' : 'Use Hint'}</h3>
                 <p className="text-slate-300 mb-3">Cost: {HINT_PRICE_COINS} coins</p>
                 {hintConfirmLoading ? (
                   <p className="text-slate-300">Loading assets...</p>
