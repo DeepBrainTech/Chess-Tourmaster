@@ -2,7 +2,7 @@ import type { GameMode } from './types';
 import type { LevelConfig, TileData } from './types';
 import { MATH_PIECE_CONFIG, type MathPiece } from './types';
 
-/** 权重: pawn 多, queen 少，保证 requiredScore 可达成 */
+/** Weighted pick: more pawns, fewer queens, to keep requiredScore achievable. */
 function pickRandomMathPiece(rng: () => number): MathPiece {
   const roll = rng();
   if (roll < 0.35) return 'pawn';
@@ -43,13 +43,29 @@ function getValidMoves(r: number, c: number, size: number): { r: number; c: numb
 }
 
 function getClassicTargetPathLength(levelNum: number, size: number): number {
-  const cap = size * size;
-  if (levelNum <= 1) return Math.min(cap, 5);
-  if (levelNum <= 2) return Math.min(cap, 8);
-  if (levelNum <= 3) return Math.min(cap, 12);
-  if (levelNum <= 4) return Math.min(cap, 18);
-  // Lv5+ 平滑增长，避免从固定值突跳到满盘
-  return Math.min(cap - 2, 18 + (levelNum - 4));
+  const cap = size * size - 2;
+  if (levelNum <= 15) {
+    // 5x5: 5 -> 19
+    return Math.min(cap, 4 + levelNum);
+  }
+  if (levelNum <= 30) {
+    // 6x6: step down on board-size jump, then rise 16 -> 30
+    return Math.min(cap, 15 + (levelNum - 15));
+  }
+  // 7x7: another step down, then slower long-tail growth
+  return Math.min(cap, 24 + Math.floor((levelNum - 31) * 0.35));
+}
+function getClassicFireChance(levelNum: number): number {
+  if (levelNum <= 15) {
+    // 0.07 -> 0.20
+    return Math.min(0.20, 0.07 + (levelNum - 1) * ((0.20 - 0.07) / 14));
+  }
+  if (levelNum <= 30) {
+    // 0.18 -> 0.28
+    return Math.min(0.28, 0.18 + (levelNum - 16) * ((0.28 - 0.18) / 14));
+  }
+  // 0.22 -> 0.33
+  return Math.min(0.33, 0.22 + (levelNum - 31) * ((0.33 - 0.22) / 69));
 }
 
 function countNeighborFire(grid: TileData[][], r: number, c: number): number {
@@ -122,7 +138,7 @@ function buildClassicConfig(
   }
 
   const knightPos = { ...curr };
-  const fireChance = Math.min(0.35, 0.05 + levelNum * 0.02);
+  const fireChance = getClassicFireChance(levelNum);
   let tilesToVisit = 0;
   let fireCount = 0;
   const resultGrid: TileData[][] = [];
@@ -309,8 +325,8 @@ export function generateLevelConfig(levelNum: number, gameMode: GameMode): Level
   };
 
   const isMathTour = gameMode === 'math_tour';
-  config.gridSizeVal = levelNum > 5 ? 6 : 5;
-  if (levelNum > 8) config.gridSizeVal = 7;
+  config.gridSizeVal = levelNum > 15 ? 6 : 5;
+  if (levelNum > 30) config.gridSizeVal = 7;
 
   const size = config.gridSizeVal;
   let maxPossibleBaseScore = 0;
@@ -319,7 +335,7 @@ export function generateLevelConfig(levelNum: number, gameMode: GameMode): Level
   const resultGrid: TileData[][] = [];
 
   if (isMathTour) {
-    // Math Tour: 带质量检查的全盘生成（最多重试3次）
+    // Math Tour: full-board generation with quality checks (max 3 retries).
     const MAX_RETRY = 3;
     let fallbackMath: ReturnType<typeof buildMathTourConfig> | null = null;
     for (let attempt = 0; attempt < MAX_RETRY; attempt++) {
@@ -347,7 +363,7 @@ export function generateLevelConfig(levelNum: number, gameMode: GameMode): Level
     }
     config.initialScore = 0;
   } else {
-    // Classic: 带质量检查的路径生成（最多重试5次）
+    // Classic: path generation with quality checks (max 5 retries).
     const MAX_RETRY = 5;
     let fallbackClassic: ReturnType<typeof buildClassicConfig> | null = null;
     for (let attempt = 0; attempt < MAX_RETRY; attempt++) {
