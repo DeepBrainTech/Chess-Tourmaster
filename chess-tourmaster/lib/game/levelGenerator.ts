@@ -68,6 +68,144 @@ function getClassicFireChance(levelNum: number): number {
   return Math.min(0.33, 0.22 + (levelNum - 31) * ((0.33 - 0.22) / 69));
 }
 
+function getMathFireChance(levelNum: number): number {
+  if (levelNum <= 15) {
+    // 0.10 -> 0.20
+    return Math.min(0.20, 0.10 + (levelNum - 1) * ((0.20 - 0.10) / 14));
+  }
+  if (levelNum <= 30) {
+    // 0.18 -> 0.28
+    return Math.min(0.28, 0.18 + (levelNum - 16) * ((0.28 - 0.18) / 14));
+  }
+  // 0.24 -> 0.35
+  return Math.min(0.35, 0.24 + (levelNum - 31) * ((0.35 - 0.24) / 69));
+}
+
+function getMathRequiredRatio(levelNum: number): number {
+  if (levelNum <= 15) return 0.65;
+  if (levelNum <= 30) return 0.78;
+  if (levelNum <= 60) return 0.90;
+  return 1.00;
+}
+
+function getMathRequiredBaseFloor(levelNum: number): number {
+  if (levelNum <= 15) return 35;
+  if (levelNum <= 30) return 50;
+  if (levelNum <= 60) return 65;
+  return 80;
+}
+
+function getMathFireWeight(levelNum: number): number {
+  if (levelNum <= 15) return 6;
+  if (levelNum <= 30) return 7;
+  if (levelNum <= 60) return 8;
+  return 9;
+}
+
+function getMathQueenWeight(levelNum: number): number {
+  if (levelNum <= 15) return 4;
+  if (levelNum <= 30) return 5;
+  if (levelNum <= 60) return 6;
+  return 7;
+}
+
+function canReachKingApproach(
+  grid: TileData[][],
+  start: { r: number; c: number },
+  king: { r: number; c: number },
+  size: number
+): boolean {
+  const queue: Array<{ r: number; c: number }> = [{ ...start }];
+  const visited = new Set<string>([`${start.r},${start.c}`]);
+
+  while (queue.length > 0) {
+    const curr = queue.shift();
+    if (!curr) break;
+    for (const move of getValidMoves(curr.r, curr.c, size)) {
+      if (move.r === king.r && move.c === king.c) continue;
+      const tile = grid[move.r]?.[move.c];
+      if (!tile || tile.type === 'void' || tile.type === 'king') continue;
+      const key = `${move.r},${move.c}`;
+      if (visited.has(key)) continue;
+      if (getValidMoves(move.r, move.c, size).some((m) => m.r === king.r && m.c === king.c)) {
+        return true;
+      }
+      visited.add(key);
+      queue.push(move);
+    }
+  }
+  return false;
+}
+
+function estimateMathCapturableScore(
+  grid: TileData[][],
+  start: { r: number; c: number },
+  king: { r: number; c: number },
+  size: number
+): number {
+  const tileIndex = new Map<string, number>();
+  let index = 0;
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      if (r === king.r && c === king.c) continue;
+      if (r === start.r && c === start.c) continue;
+      const tile = grid[r]?.[c];
+      if (!tile || tile.type === 'void' || tile.type === 'king') continue;
+      tileIndex.set(`${r},${c}`, index++);
+    }
+  }
+
+  type SearchState = { r: number; c: number; score: number; visitedMask: bigint };
+  const BEAM_WIDTH = 80;
+  let beam: SearchState[] = [{ r: start.r, c: start.c, score: 0, visitedMask: 0n }];
+  let bestCapturable = getValidMoves(start.r, start.c, size).some((m) => m.r === king.r && m.c === king.c)
+    ? 0
+    : Number.NEGATIVE_INFINITY;
+
+  const maxDepth = tileIndex.size;
+  for (let depth = 0; depth < maxDepth; depth++) {
+    const nextMap = new Map<string, SearchState>();
+    for (const state of beam) {
+      for (const move of getValidMoves(state.r, state.c, size)) {
+        if (move.r === king.r && move.c === king.c) continue;
+        const tile = grid[move.r]?.[move.c];
+        if (!tile || tile.type === 'void' || tile.type === 'king') continue;
+        const idx = tileIndex.get(`${move.r},${move.c}`);
+        if (idx == null) continue;
+        const bit = 1n << BigInt(idx);
+        if ((state.visitedMask & bit) !== 0n) continue;
+        const tileMult = tile.tileMultiplier ?? 1;
+        const nextScore = tileMult > 1 ? state.score * tileMult : state.score + (tile.value ?? 0);
+        const nextVisitedMask = state.visitedMask | bit;
+        const key = `${move.r},${move.c},${nextVisitedMask.toString()}`;
+        const prev = nextMap.get(key);
+        if (!prev || nextScore > prev.score) {
+          nextMap.set(key, { r: move.r, c: move.c, score: nextScore, visitedMask: nextVisitedMask });
+        }
+      }
+    }
+
+    if (nextMap.size === 0) break;
+    const nextStates = Array.from(nextMap.values());
+    for (const state of nextStates) {
+      const canCapture = getValidMoves(state.r, state.c, size).some((m) => m.r === king.r && m.c === king.c);
+      if (canCapture && state.score > bestCapturable) {
+        bestCapturable = state.score;
+      }
+    }
+
+    nextStates.sort((a, b) => {
+      const aCanCapture = getValidMoves(a.r, a.c, size).some((m) => m.r === king.r && m.c === king.c);
+      const bCanCapture = getValidMoves(b.r, b.c, size).some((m) => m.r === king.r && m.c === king.c);
+      if (aCanCapture !== bCanCapture) return aCanCapture ? -1 : 1;
+      return b.score - a.score;
+    });
+    beam = nextStates.slice(0, BEAM_WIDTH);
+  }
+
+  return Number.isFinite(bestCapturable) ? Math.floor(bestCapturable) : 0;
+}
+
 function countNeighborFire(grid: TileData[][], r: number, c: number): number {
   let count = 0;
   for (let dr = -1; dr <= 1; dr++) {
@@ -196,14 +334,6 @@ function isClassicLayoutQualityOk(
   return kingApproaches >= 2;
 }
 
-function clampRequiredScore(rawRequired: number, maxPossibleBaseScore: number, size: number): number {
-  const minRatio = size === 7 ? 0.5 : size === 6 ? 0.45 : 0.4;
-  const maxRatio = size === 7 ? 0.75 : size === 6 ? 0.72 : 0.7;
-  const minRequired = Math.max(1, Math.floor(maxPossibleBaseScore * minRatio));
-  const maxRequired = Math.max(minRequired, Math.floor(maxPossibleBaseScore * maxRatio));
-  return Math.min(maxRequired, Math.max(minRequired, rawRequired));
-}
-
 function buildMathTourConfig(
   levelNum: number,
   size: number,
@@ -218,6 +348,7 @@ function buildMathTourConfig(
   scoringTiles: number;
   bishopTiles: number;
   kingLandingCount: number;
+  kingApproachReachable: boolean;
   requiredScore: number;
 } {
   const kr = Math.floor(rng() * size);
@@ -236,8 +367,9 @@ function buildMathTourConfig(
   let fireCount = 0;
   let scoringTiles = 0;
   let bishopTiles = 0;
+  let queenTiles = 0;
   const resultGrid: TileData[][] = [];
-  const fireChance = Math.min(0.45, 0.1 + levelNum * 0.025);
+  const fireChance = getMathFireChance(levelNum);
 
   for (let r = 0; r < size; r++) {
     resultGrid[r] = [];
@@ -264,6 +396,7 @@ function buildMathTourConfig(
           maxPossibleBaseScore += value * tileMultiplier;
           scoringTiles++;
           if (piece === 'bishop') bishopTiles++;
+          if (piece === 'queen') queenTiles++;
         }
       }
       resultGrid[r][c] = { type, hasFire, visited: isStart, r, c, value, tileMultiplier, piece };
@@ -277,9 +410,17 @@ function buildMathTourConfig(
     if (m.r === sr && m.c === sc) return false;
     return resultGrid[m.r]?.[m.c]?.type !== 'king';
   }).length;
+  const kingApproachReachable = canReachKingApproach(resultGrid, knightPos, kingPos, size);
 
-  const rawRequired = Math.max(1, Math.floor(maxPossibleBaseScore * 0.6));
-  const requiredScore = clampRequiredScore(rawRequired, maxPossibleBaseScore, size);
+  const effectiveBase = maxPossibleBaseScore + tilesToVisit;
+  const weightedRequired = Math.floor(
+    effectiveBase * getMathRequiredRatio(levelNum)
+      + fireCount * getMathFireWeight(levelNum)
+      + queenTiles * getMathQueenWeight(levelNum)
+  );
+  const baseRequiredScore = Math.max(getMathRequiredBaseFloor(levelNum), Math.max(1, weightedRequired));
+  const capturableScore = estimateMathCapturableScore(resultGrid, knightPos, kingPos, size);
+  const requiredScore = Math.max(1, Math.min(baseRequiredScore, capturableScore));
 
   return {
     grid: resultGrid,
@@ -291,12 +432,13 @@ function buildMathTourConfig(
     scoringTiles,
     bishopTiles,
     kingLandingCount,
+    kingApproachReachable,
     requiredScore,
   };
 }
 
 function isMathTourLayoutQualityOk(candidate: ReturnType<typeof buildMathTourConfig>): boolean {
-  const { tilesToVisit, fireCount, scoringTiles, bishopTiles, kingLandingCount } = candidate;
+  const { tilesToVisit, fireCount, scoringTiles, bishopTiles, kingLandingCount, kingApproachReachable, requiredScore } = candidate;
   if (tilesToVisit <= 0 || scoringTiles <= 0) return false;
 
   const fireDensity = fireCount / tilesToVisit;
@@ -305,7 +447,9 @@ function isMathTourLayoutQualityOk(candidate: ReturnType<typeof buildMathTourCon
   const bishopRatio = bishopTiles / scoringTiles;
   if (bishopRatio > 0.35) return false;
 
-  return kingLandingCount >= 2;
+  if (kingLandingCount < 2) return false;
+  if (!kingApproachReachable) return false;
+  return requiredScore >= 1;
 }
 
 export function generateLevelConfig(levelNum: number, gameMode: GameMode): LevelConfig {

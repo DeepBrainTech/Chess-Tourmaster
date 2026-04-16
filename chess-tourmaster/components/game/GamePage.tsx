@@ -401,8 +401,8 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
       const r = state.requiredScore;
       const s = state.currentScore;
       if (r <= 0) stars = 3;
-      else if (s >= r * 1.1) stars = 3;
-      else if (s >= r * 1.05) stars = 2;
+      else if (s >= r * 1.2) stars = 3;
+      else if (s >= r * 1.08) stars = 2;
       else stars = 1;
     } else {
       stars = 1;
