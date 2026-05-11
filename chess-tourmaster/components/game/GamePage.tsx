@@ -53,8 +53,8 @@ function normalizeStars(value: unknown): number {
 type Props = {
   token: string | null;
   username: string;
-  portalToken: string | null;
-  portalApiBase: string;
+  locale?: string | null;
+  initialPortalAssets: { coins: number; diamonds: number; flowers: number } | null;
 };
 type LeaderboardEntry = {
   rank: number;
@@ -70,6 +70,7 @@ type LeaderboardMode = 'classic' | 'math_tour';
 type ExchangeType = 'hint' | 'undo';
 const HINT_ITEM_ID = 'chess_tourmaster_hint';
 const HINT_GAME_MODE = 'chess-tourmaster';
+const PORTAL_API = 'https://api.deepbraintechnology.com';
 const HINT_PRICE_COINS = 5;
 const UNDO_ITEM_ID = 'chess_tourmaster_undo';
 type PortalErrorCode =
@@ -132,7 +133,7 @@ function getPortalErrorMessage(code: PortalErrorCode | null): string | null {
   }
 }
 
-export default function GamePage({ token, username, portalToken, portalApiBase }: Props) {
+export default function GamePage({ token, username, initialPortalAssets }: Props) {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
   const [modalType, setModalType] = useState<ModalType>('mode');
   const [winData, setWinData] = useState<WinData | null>(null);
@@ -147,7 +148,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
   const [hintConfirmLoading, setHintConfirmLoading] = useState(false);
   const [hintConfirmSubmitting, setHintConfirmSubmitting] = useState(false);
   const [exchangeType, setExchangeType] = useState<ExchangeType>('hint');
-  const [portalAssets, setPortalAssets] = useState<PortalAssets | null>(null);
+  const [portalAssets, setPortalAssets] = useState<PortalAssets | null>(initialPortalAssets ?? null);
   const [hintConfirmError, setHintConfirmError] = useState<string | null>(null);
   const [hintTarget, setHintTarget] = useState<{ r: number; c: number } | null>(null);
   const [message, setMessage] = useState<{ text: string; className: string } | null>(null);
@@ -155,6 +156,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
   const fireStartRef = useRef<number>(0);
   const lastSpokenSecondRef = useRef<number>(4);
   const wonByCaptureRef = useRef(false);
+  const portalBase = normalizeApiBase(process.env.NEXT_PUBLIC_PORTAL_API_BASE || PORTAL_API);
 
   const loadProgress = useCallback(async (mode: 'classic' | 'math_tour') => {
     if (!token) return null;
@@ -469,16 +471,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
   const undoMove = useCallback(async () => {
     if (!token || undoLoading || state.history.length === 0 || !state.isPlaying) return;
     if (undoCount <= 0) {
-      if (!portalToken) {
-        setMessage({
-          text: 'No undos left.',
-          className: 'text-amber-300',
-        });
-        setTimeout(() => setMessage(null), 1800);
-        return;
-      }
-      const base = normalizeApiBase(portalApiBase || process.env.NEXT_PUBLIC_PORTAL_API_BASE || '');
-      if (!base) {
+      if (!portalBase) {
         setMessage({
           text: 'No undos left.',
           className: 'text-amber-300',
@@ -491,9 +484,10 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
       setHintConfirmLoading(true);
       setHintConfirmError(null);
       try {
-        const res = await fetch(`${base}/api/user/assets`, {
+        const res = await fetch(`${portalBase}/api/user/assets`, {
+          method: 'GET',
+          credentials: 'include',
           headers: {
-            Authorization: `Bearer ${portalToken}`,
             'X-User-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
           },
         });
@@ -554,7 +548,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     } finally {
       setUndoLoading(false);
     }
-  }, [portalApiBase, portalToken, state.history.length, state.isPlaying, token, undoCount, undoLoading]);
+  }, [portalBase, state.history.length, state.isPlaying, token, undoCount, undoLoading]);
 
   const setMode = useCallback((mode: 'classic' | 'math_tour') => {
     dispatch({ type: 'SET_MODE', payload: mode });
@@ -573,28 +567,26 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     [state.level, state.maxUnlockedLevel, startLevel]
   );
 
-  const getPortalAssets = useCallback(
-    async (base: string) => {
-      if (!portalToken) return null;
-      const res = await fetch(`${base}/api/user/assets`, {
-        headers: {
-          Authorization: `Bearer ${portalToken}`,
-          'X-User-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-        },
-      });
-      const data = await res.json().catch(() => null);
-      const coins = data?.data?.coins;
-      const diamonds = data?.data?.diamonds;
-      const flowers = data?.data?.flowers;
-      if (typeof coins !== 'number' || typeof diamonds !== 'number' || typeof flowers !== 'number') return null;
-      return {
-        coins: Math.max(0, Math.floor(coins)),
-        diamonds: Math.max(0, Math.floor(diamonds)),
-        flowers: Math.max(0, Math.floor(flowers)),
-      };
-    },
-    [portalToken]
-  );
+  const getPortalAssets = useCallback(async () => {
+    if (!portalBase) return null;
+    const res = await fetch(`${portalBase}/api/user/assets`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        'X-User-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      },
+    });
+    const data = await res.json().catch(() => null);
+    const coins = data?.data?.coins;
+    const diamonds = data?.data?.diamonds;
+    const flowers = data?.data?.flowers;
+    if (typeof coins !== 'number' || typeof diamonds !== 'number' || typeof flowers !== 'number') return null;
+    return {
+      coins: Math.max(0, Math.floor(coins)),
+      diamonds: Math.max(0, Math.floor(diamonds)),
+      flowers: Math.max(0, Math.floor(flowers)),
+    };
+  }, [portalBase]);
 
   const executeHint = useCallback(async (): Promise<'used' | 'need_exchange' | 'failed'> => {
     if (!token || !state.isPlaying || hintLoading || hintConfirmSubmitting) return 'failed';
@@ -648,12 +640,13 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     }
   }, [hintConfirmSubmitting, hintLoading, state, token]);
 
-  const openHintExchangeDialog = useCallback(async (base: string) => {
+  const openHintExchangeDialog = useCallback(async () => {
     setHintConfirmOpen(true);
     setHintConfirmLoading(true);
     setHintConfirmError(null);
     try {
-      const assets = await getPortalAssets(base);
+      // 优先使用 hash 注入的初始资产值（bootstrap 场景可能为 null，需要再请求一次）
+      const assets = portalAssets ?? (await getPortalAssets());
       if (!assets) {
         setPortalAssets(null);
         setHintConfirmError('Failed to load assets.');
@@ -666,64 +659,44 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     } finally {
       setHintConfirmLoading(false);
     }
-  }, [getPortalAssets]);
+  }, [getPortalAssets, portalAssets]);
 
   const handleHint = useCallback(async () => {
     if (!token || !state.isPlaying || hintLoading || hintConfirmSubmitting) return;
-    if (!portalToken) {
-      if (hintCount <= 0) {
-        setMessage({
-          text: 'No hints left.',
-          className: 'text-amber-300',
-        });
-        setTimeout(() => setMessage(null), 1800);
-        return;
-      }
-      await executeHint();
-      return;
-    }
-
-    const base = normalizeApiBase(portalApiBase || process.env.NEXT_PUBLIC_PORTAL_API_BASE || '');
-    if (!base) {
-      if (hintCount <= 0) {
-        setMessage({
-          text: 'No hints left.',
-          className: 'text-amber-300',
-        });
-        setTimeout(() => setMessage(null), 1800);
-        return;
-      }
-      await executeHint();
-      return;
-    }
-
     if (hintCount <= 0) {
+      if (!portalBase) {
+        setMessage({
+          text: 'No hints left.',
+          className: 'text-amber-300',
+        });
+        setTimeout(() => setMessage(null), 1800);
+        return;
+      }
       setExchangeType('hint');
-      await openHintExchangeDialog(base);
+      await openHintExchangeDialog();
       return;
     }
 
     const result = await executeHint();
     if (result === 'need_exchange') {
       setExchangeType('hint');
-      await openHintExchangeDialog(base);
+      await openHintExchangeDialog();
       return;
     }
-  }, [executeHint, hintConfirmSubmitting, hintCount, hintLoading, openHintExchangeDialog, portalApiBase, portalToken, state.isPlaying, token]);
+  }, [executeHint, hintConfirmSubmitting, hintCount, hintLoading, openHintExchangeDialog, portalBase, state.isPlaying, token]);
 
   const confirmHintExchange = useCallback(async () => {
     if (hintConfirmSubmitting || hintConfirmLoading) return;
-    const base = normalizeApiBase(portalApiBase || process.env.NEXT_PUBLIC_PORTAL_API_BASE || '');
-    if (!portalToken || !base || !token) return;
+    if (!portalBase || !token) return;
     setHintConfirmSubmitting(true);
     try {
       const itemId = exchangeType === 'undo' ? UNDO_ITEM_ID : HINT_ITEM_ID;
       const redeemRes = await fetch(
-        `${base}/api/user/shop/redeem?item_id=${encodeURIComponent(itemId)}&game_mode=${encodeURIComponent(HINT_GAME_MODE)}`,
+        `${portalBase}/api/user/shop/redeem?item_id=${encodeURIComponent(itemId)}&game_mode=${encodeURIComponent(HINT_GAME_MODE)}`,
         {
           method: 'POST',
+          credentials: 'include',
           headers: {
-            Authorization: `Bearer ${portalToken}`,
             'X-User-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
           },
         }
@@ -762,7 +735,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
           }
         }
         setHintConfirmError(null);
-        const assets = await getPortalAssets(base);
+        const assets = await getPortalAssets();
         setPortalAssets(assets);
         setHintConfirmOpen(false);
         return;
@@ -774,7 +747,7 @@ export default function GamePage({ token, username, portalToken, portalApiBase }
     } finally {
       setHintConfirmSubmitting(false);
     }
-  }, [exchangeType, getPortalAssets, hintConfirmLoading, hintConfirmSubmitting, loadProgress, portalApiBase, portalToken, state.gameMode, token]);
+  }, [exchangeType, getPortalAssets, hintConfirmLoading, hintConfirmSubmitting, loadProgress, portalBase, state.gameMode, token]);
 
   const isHomeView = modalType === 'mode';
 
