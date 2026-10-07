@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import GamePage from '@/components/game/GamePage';
+import { getPortalApiBase } from '@/lib/apiBase';
 
 const DEV_TOKEN = '__dev__';
 const DEV_USERNAME = 'DevUser';
-const PORTAL_API = 'https://api.deepbraintechnology.com';
+const PORTAL_API = getPortalApiBase();
 const GAME_KEY = 'chess-tourmaster';
 
 type PortalAssets = {

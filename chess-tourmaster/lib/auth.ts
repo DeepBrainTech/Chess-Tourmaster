@@ -18,15 +18,22 @@ const DEV_PAYLOAD: TokenPayload = { sub: 'DevUser', user_id: 0, username: 'DevUs
  */
 export function verifyToken(token: string): TokenPayload | null {
   try {
-    const secret = process.env.TOURMASTER_JWT_SECRET || process.env.JWT_SECRET;
+    const secret = process.env.TOURMASTER_JWT_SECRET;
     
     if (!secret) {
-      console.error('JWT_SECRET not configured');
+      console.error('TOURMASTER_JWT_SECRET not configured');
       return null;
     }
 
-    const decoded = jwt.verify(token, secret) as TokenPayload;
-    return decoded;
+    const decoded = jwt.verify(token, secret, {
+      algorithms: [(process.env.TOURMASTER_JWT_ALG || 'HS256') as jwt.Algorithm],
+      audience: process.env.TOURMASTER_JWT_AUD || 'chess-tourmaster',
+      issuer: process.env.TOURMASTER_JWT_ISS || 'main-portal',
+    });
+    if (typeof decoded === 'string' || !Number.isSafeInteger(decoded.user_id)
+      || decoded.user_id <= 0 || typeof decoded.username !== 'string'
+      || typeof decoded.exp !== 'number' || 'purpose' in decoded) return null;
+    return decoded as TokenPayload;
   } catch (error) {
     console.error('Token verification failed:', error);
     return null;

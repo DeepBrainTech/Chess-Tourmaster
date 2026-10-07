@@ -14,23 +14,6 @@ export async function ensureUserHint(portalUserId: number, username: string) {
   });
 }
 
-export async function addHintCount(portalUserId: number, username: string, amount: number) {
-  const safeAmount = Math.max(0, Math.floor(amount));
-  if (safeAmount === 0) {
-    return ensureUserHint(portalUserId, username);
-  }
-
-  await ensureUserHint(portalUserId, username);
-  return prisma.userHint.update({
-    where: { portal_user_id: portalUserId },
-    data: {
-      username,
-      hint_count: { increment: safeAmount },
-    },
-    select: { hint_count: true, undo_count: true },
-  });
-}
-
 export async function consumeHintCount(portalUserId: number, username: string) {
   await ensureUserHint(portalUserId, username);
   const result = await prisma.userHint.updateMany({
@@ -63,23 +46,6 @@ export async function consumeHintCount(portalUserId: number, username: string) {
     success: true,
     hint_count: updated?.hint_count ?? 0,
   };
-}
-
-export async function addUndoCount(portalUserId: number, username: string, amount: number) {
-  const safeAmount = Math.max(0, Math.floor(amount));
-  if (safeAmount === 0) {
-    return ensureUserHint(portalUserId, username);
-  }
-
-  await ensureUserHint(portalUserId, username);
-  return prisma.userHint.update({
-    where: { portal_user_id: portalUserId },
-    data: {
-      username,
-      undo_count: { increment: safeAmount },
-    },
-    select: { hint_count: true, undo_count: true },
-  });
 }
 
 export async function consumeUndoCount(portalUserId: number, username: string) {

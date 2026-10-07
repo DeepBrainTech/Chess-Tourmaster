@@ -7,3 +7,7 @@ export function getApiBase(): string {
   const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
   return configured && configured.length > 0 ? configured.replace(/\/+$/, '') : '';
 }
+
+export function getPortalApiBase(): string {
+  return (process.env.NEXT_PUBLIC_PORTAL_API_BASE?.trim() || 'https://api.deepbraintechnology.com').replace(/\/+$/, '');
+}
