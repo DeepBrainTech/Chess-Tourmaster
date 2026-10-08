@@ -56,6 +56,7 @@ type Props = {
   token: string | null;
   username: string;
   locale?: string | null;
+  portalLocale?: 'en' | 'zn';
   initialPortalAssets: { coins: number; diamonds: number; flowers: number } | null;
 };
 type LeaderboardEntry = {
@@ -73,7 +74,7 @@ type ExchangeType = 'hint' | 'undo';
 const HINT_ITEM_ID = 'chess_tourmaster_hint';
 
 const UNDO_ITEM_ID = 'chess_tourmaster_undo';
-export default function GamePage({ token, username, initialPortalAssets }: Props) {
+export default function GamePage({ token, username, initialPortalAssets, portalLocale }: Props) {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
   const [modalType, setModalType] = useState<ModalType>('mode');
   const [winData, setWinData] = useState<WinData | null>(null);
@@ -576,6 +577,7 @@ export default function GamePage({ token, username, initialPortalAssets }: Props
       className={`game-root min-h-[100dvh] w-screen flex flex-col items-center justify-start md:justify-center relative overflow-hidden ${state.theme}`}
     >
       <PortalButton
+        portalLocale={portalLocale}
         isHomeView={isHomeView}
         onBackHome={() => setModalType('mode')}
       />

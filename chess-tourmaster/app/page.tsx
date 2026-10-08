@@ -41,6 +41,7 @@ function decodeJwt(token: string): { user_id?: number; username?: string } | nul
 export default function Home() {
   const [token, setToken] = useState<string | null>(null); // game_token
   const [locale, setLocale] = useState<string | null>(null);
+  const [portalLocale, setPortalLocale] = useState<'en' | 'zn'>('en');
   const [initialPortalAssets, setInitialPortalAssets] = useState<PortalAssets | null>(null);
   const [username, setUsername] = useState<string>('Guest');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -62,7 +63,20 @@ export default function Home() {
     const parseFromHash = () => {
       const hash = new URLSearchParams(window.location.hash.slice(1));
       nextToken = hash.get('token'); // 首屏用的短期 game_token
-      nextLocale = hash.get('locale');
+      const query = new URLSearchParams(window.location.search);
+      nextLocale = hash.get('locale') ?? query.get('locale');
+      // The portal language controls the return link independently of the game UI.
+      const incomingLocale = hash.get('portalLocale') ?? query.get('portalLocale') ?? nextLocale;
+      let savedLocale: string | null = null;
+      try {
+        savedLocale = window.sessionStorage.getItem('chess-tourmaster:portalLocale');
+      } catch { /* Storage may be unavailable. */ }
+      const language = (incomingLocale ?? savedLocale)?.toLowerCase().split(/[-_]/)[0];
+      const returnLocale = language === 'zn' || language === 'zh' ? 'zn' : 'en';
+      setPortalLocale(returnLocale);
+      try {
+        window.sessionStorage.setItem('chess-tourmaster:portalLocale', returnLocale);
+      } catch { /* The in-memory return link still works. */ }
       const hasAssets = hash.has('coins') || hash.has('diamonds') || hash.has('flowers');
       if (hasAssets) {
         const coins = Number(hash.get('coins') ?? 0);
@@ -215,6 +229,7 @@ export default function Home() {
       token={token}
       username={username}
       locale={locale}
+      portalLocale={portalLocale}
       initialPortalAssets={initialPortalAssets}
     />
   );
