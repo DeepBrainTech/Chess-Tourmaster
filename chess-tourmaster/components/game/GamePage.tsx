@@ -24,7 +24,7 @@ import Board from './Board';
 import MainModal from './MainModal';
 import { getApiBase, getPortalApiBase } from '@/lib/apiBase';
 import { getHintMove } from '@/lib/game/hint';
-import { usePortalInventory } from '@/hooks/usePortalInventory';
+import { useGameInventory } from '@/hooks/useGameInventory';
 import type { Assets } from '@/lib/portal-client';
 
 type WinData = {
@@ -98,9 +98,13 @@ export default function GamePage({ token, username, initialPortalAssets, portalL
   const lastSpokenSecondRef = useRef<number>(4);
   const wonByCaptureRef = useRef(false);
   const portalBase = getPortalApiBase();
-  const { client: portal, quantities, buy: buyPortalItem, use: consumePortalItem } = usePortalInventory(portalBase, token);
-  const hintCount = localHintCount + (quantities[HINT_ITEM_ID] || 0);
-  const undoCount = localUndoCount + (quantities[UNDO_ITEM_ID] || 0);
+  const updateInventoryCounts = useCallback((counts: { hint_count: number; undo_count: number }) => {
+    setLocalHintCount(counts.hint_count);
+    setLocalUndoCount(counts.undo_count);
+  }, []);
+  const { client: portal, buy: buyGameItem, use: consumeGameItem } = useGameInventory(portalBase, token, updateInventoryCounts);
+  const hintCount = localHintCount;
+  const undoCount = localUndoCount;
   const [exchangeCost, setExchangeCost] = useState<Assets | null>(null);
   const exchangeBusy = useRef(false);
   const loadExchange = useCallback(async (kind: ExchangeType) => {
@@ -448,7 +452,7 @@ export default function GamePage({ token, username, initialPortalAssets, portalL
     }
     setUndoLoading(true);
     try {
-      const used = await consumePortalItem(UNDO_ITEM_ID, async () => {
+      const used = await consumeGameItem(UNDO_ITEM_ID, async () => {
         const response = await fetch(`${getApiBase()}/api/undo/use`, {
           method: 'POST', headers: { Authorization: `Bearer ${token}` },
         });
@@ -469,7 +473,7 @@ export default function GamePage({ token, username, initialPortalAssets, portalL
     } finally {
       setUndoLoading(false);
     }
-  }, [portalBase, state.history.length, state.isPlaying, token, undoCount, undoLoading, loadExchange, consumePortalItem]);
+  }, [portalBase, state.history.length, state.isPlaying, token, undoCount, undoLoading, loadExchange, consumeGameItem]);
 
   const setMode = useCallback((mode: 'classic' | 'math_tour') => {
     dispatch({ type: 'SET_MODE', payload: mode });
@@ -492,7 +496,7 @@ export default function GamePage({ token, username, initialPortalAssets, portalL
     if (!token || !state.isPlaying || hintLoading || hintConfirmSubmitting) return 'failed';
     setHintLoading(true);
     try {
-      const used = await consumePortalItem(HINT_ITEM_ID, async () => {
+      const used = await consumeGameItem(HINT_ITEM_ID, async () => {
         const response = await fetch(`${getApiBase()}/api/hint/use`, {
           method: 'POST', headers: { Authorization: `Bearer ${token}` },
         });
@@ -525,7 +529,7 @@ export default function GamePage({ token, username, initialPortalAssets, portalL
     } finally {
       setHintLoading(false);
     }
-  }, [hintConfirmSubmitting, hintLoading, state, token, consumePortalItem]);
+  }, [hintConfirmSubmitting, hintLoading, state, token, consumeGameItem]);
 
   const openHintExchangeDialog = useCallback(() => loadExchange('hint'), [loadExchange]);
 
@@ -559,7 +563,7 @@ export default function GamePage({ token, username, initialPortalAssets, portalL
     setHintConfirmSubmitting(true);
     setHintConfirmError(null);
     try {
-      const result = await buyPortalItem(exchangeType === 'undo' ? UNDO_ITEM_ID : HINT_ITEM_ID);
+      const result = await buyGameItem(exchangeType === 'undo' ? UNDO_ITEM_ID : HINT_ITEM_ID);
       setPortalAssets(result.assets);
       setHintConfirmOpen(false);
     } catch (error) {
@@ -568,7 +572,7 @@ export default function GamePage({ token, username, initialPortalAssets, portalL
       exchangeBusy.current = false;
       setHintConfirmSubmitting(false);
     }
-  }, [buyPortalItem, exchangeType, exchangeCost, hintConfirmLoading, hintConfirmSubmitting, token]);
+  }, [buyGameItem, exchangeType, exchangeCost, hintConfirmLoading, hintConfirmSubmitting, token]);
 
   const isHomeView = modalType === 'mode';
 

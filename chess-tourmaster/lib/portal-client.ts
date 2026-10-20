@@ -26,15 +26,13 @@ export type Quote = {
   assets: Assets;
   cost: Cost;
 };
-export type RedeemedItem = {
+export type InventoryDelivery = {
   item_id: string;
-  item_name: string;
-  games: string[];
-  game_mode: string | null;
-  cost: Assets;
-  inventory_quantity: number;
-  assets: Assets;
+  purchase_id: string;
+  grants: Record<string, number>;
+  grant_token: string;
 };
+export type RedeemedItem = InventoryDelivery & { cost: Assets; assets: Assets };
 
 export class PortalApiError extends Error {
   constructor(public readonly status: number, public readonly code: string) {
@@ -76,10 +74,6 @@ export class PortalGameClient {
     return this.request("/api/user/assets");
   }
 
-  inventory(): Promise<{ items: { item_id: string; quantity: number }[] }> {
-    return this.request("/api/user/shop/inventory");
-  }
-
   catalog(): Promise<{ items: Record<string, { name: string; games: string[]; cost: Assets }>; game_mode: string }> {
     const query = new URLSearchParams({ game_mode: this.gameKey });
     return this.request("/api/games/shop/catalog?" + query);
@@ -111,11 +105,16 @@ export class PortalGameClient {
     return this.request("/api/user/shop/redeem?" + query, { method: "POST" });
   }
 
-  consumeItem(request: ItemRequest, count = 1): Promise<{
-    item_id: string; consumed_count: number; inventory_quantity: number; game_mode: string;
-  }> {
-    const query = new URLSearchParams({ ...request, count: String(count), game_mode: this.gameKey });
-    return this.request("/api/user/shop/consume?" + query, { method: "POST" });
+  migrateInventory(): Promise<{ migrated: boolean }> {
+    return this.request('/api/user/shop/chess-tourmaster/migrate', { method: 'POST' });
+  }
+
+  pendingDeliveries(): Promise<{ deliveries: InventoryDelivery[] }> {
+    return this.request('/api/user/shop/chess-tourmaster/deliveries');
+  }
+
+  acknowledgeDelivery(purchaseId: string): Promise<{ delivered: boolean }> {
+    return this.request('/api/user/shop/chess-tourmaster/deliveries/' + encodeURIComponent(purchaseId) + '/ack', { method: 'POST' });
   }
 
   checkout(asset: "coins" | "diamonds", bundleId: string, locale: string): Promise<{ url: string }> {

@@ -55,3 +55,15 @@ model UserHint {
   @@map("user_hints")
 }
 
+
+// Delivery receipts provide idempotency; usable stock remains in user_hints.
+model InventoryDelivery {
+  portal_user_id Int
+  purchase_id    String   @db.Uuid
+  hint_count     Int      @default(0)
+  undo_count     Int      @default(0)
+  created_at     DateTime @default(now())
+
+  @@id([portal_user_id, purchase_id])
+  @@map("inventory_deliveries")
+}

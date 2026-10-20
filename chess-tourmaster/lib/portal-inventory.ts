@@ -1,4 +1,4 @@
-import { PortalApiError, PortalGameClient, type Grant } from './portal-client';
+import { PortalApiError, PortalGameClient } from './portal-client';
 
 /** Browser-side retries are scoped to the signed-in game account. */
 export class PortalInventoryClient extends PortalGameClient {
@@ -67,26 +67,12 @@ export class PortalInventoryClient extends PortalGameClient {
   }
 
   buyItem(itemId: string) {
-    return this.mutate(`redeem:${itemId}`, id => this.redeemItem({ item_id: itemId, request_id: id }));
+    return this.mutate(`local-redeem:${itemId}`, id => this.redeemItem({ item_id: itemId, request_id: id }), true);
   }
 
-  useItem(itemId: string, count = 1) {
-    return this.mutate(`consume:${itemId}:${count}`, id => this.consumeItem(
-      { item_id: itemId, request_id: id }, count));
-  }
-
-  hasPendingUse(itemId: string, count = 1): boolean {
-    try { return !!this.read(this.key(`consume:${itemId}:${count}`)); }
-    catch { return false; }
-  }
-
-  buyGrant(productId: string, target: string): Promise<Grant> {
-    return this.mutate(`grant:${productId}:${target}`, id => this.redeemGrant(
-      productId, { target, request_id: id }), true);
-  }
-
-  finishGrant(productId: string, target: string): void {
-    this.remove(this.key(`grant:${productId}:${target}`));
+  finishItem(itemId: string, purchaseId: string): void {
+    const key = this.key(`local-redeem:${itemId}`);
+    if (this.read(key) === purchaseId) this.remove(key);
   }
 }
 

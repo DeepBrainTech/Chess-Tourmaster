@@ -44,7 +44,7 @@ function setup(storage = new Map()) {
       const key = userId + ':' + id;
       if (!completed.has(key)) {
         charges++;
-        completed.set(key, { inventory_quantity: 1, grant_token: 'signed-grant', purchase_id: id });
+        completed.set(key, { grant_token: 'signed-grant', purchase_id: id });
       }
       if (loseResponse) { loseResponse = false; throw new Error('response lost'); }
       return { ok: true, json: async () => ({ success: true, data: completed.get(key) }) };
@@ -68,25 +68,21 @@ test('redemption retry reuses UUID and a new action generates a new UUID', async
   assert.equal(url.pathname, '/api/user/shop/redeem');
   assert.equal(url.searchParams.get('game_mode'), gameKey);
   assert.equal(url.searchParams.get('item_id'), itemId);
+  f.client.finishItem(itemId, f.requests[1].id);
   await f.client.buyItem(itemId);
   assert.notEqual(f.requests[1].id, f.requests[2].id);
   assert.equal(f.charges, 2);
 });
 
-test('pending consumption survives reload and a 503 does not replace its UUID', async () => {
-  const f = setup();
-  f.lose();
-  await assert.rejects(f.client.useItem(itemId), /response lost/);
+test('pending payment survives reload and a 503 keeps the same UUID', async () => {
+  const f = setup(); f.lose();
+  await assert.rejects(f.client.buyItem(itemId), /response lost/);
   const originalId = f.requests[0].id;
-  const reloaded = setup(f.storage);
-  assert.equal(reloaded.client.hasPendingUse(itemId), true);
-  reloaded.fail(true);
-  await assert.rejects(reloaded.client.useItem(itemId), /temporarily_unavailable/);
+  const reloaded = setup(f.storage); reloaded.fail(true);
+  await assert.rejects(reloaded.client.buyItem(itemId), /temporarily_unavailable/);
   assert.equal(reloaded.requests[0].id, originalId);
-  reloaded.fail(false);
-  await reloaded.client.useItem(itemId);
+  reloaded.fail(false); await reloaded.client.buyItem(itemId);
   assert.equal(reloaded.requests[1].id, originalId);
-  assert.equal(reloaded.client.hasPendingUse(itemId), false);
 });
 
 test('portal/game account mismatch prevents mutations and accounts have separate retry keys', async () => {
@@ -112,13 +108,14 @@ test('concurrent redemption attempts cannot post twice', async () => {
   assert.equal(f.posts, 1);
 });
 
-test('paid grant retries retain purchase UUID until the game confirms fulfillment', async () => {
+test('purchase UUID stays pending until local fulfillment and stale acknowledgement cannot clear a new purchase', async () => {
   const f = setup();
-  const first = await f.client.buyGrant('replay', 'level:7');
-  const retry = await f.client.buyGrant('replay', 'level:7');
-  assert.equal(first.purchase_id, retry.purchase_id);
-  assert.equal(f.charges, 1);
-  f.client.finishGrant('replay', 'level:7');
-  const next = await f.client.buyGrant('replay', 'level:7');
+  const first = await f.client.buyItem(itemId);
+  const retry = await f.client.buyItem(itemId);
+  assert.equal(first.purchase_id, retry.purchase_id); assert.equal(f.charges, 1);
+  f.client.finishItem(itemId, first.purchase_id);
+  const next = await f.client.buyItem(itemId);
   assert.notEqual(first.purchase_id, next.purchase_id);
+  f.client.finishItem(itemId, first.purchase_id);
+  assert.equal((await f.client.buyItem(itemId)).purchase_id, next.purchase_id);
 });
