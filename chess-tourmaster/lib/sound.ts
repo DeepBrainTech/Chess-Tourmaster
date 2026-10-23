@@ -78,6 +78,11 @@ export function speak(text: string): void {
   try {
     window.speechSynthesis.cancel();
     const msg = new SpeechSynthesisUtterance(text);
+    msg.lang = 'en-US';
+    const voices = window.speechSynthesis.getVoices();
+    const englishVoice = voices.find(voice => /^en[-_]US$/i.test(voice.lang))
+      ?? voices.find(voice => /^en(?:[-_]|$)/i.test(voice.lang));
+    if (englishVoice) msg.voice = englishVoice;
     msg.rate = 1.2;
     msg.pitch = 1.0;
     window.speechSynthesis.speak(msg);
