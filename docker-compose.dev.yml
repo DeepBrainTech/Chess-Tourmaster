@@ -1,0 +1,45 @@
+name: chess-tourmaster-local
+
+services:
+  game-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: chess_tourmaster
+    volumes:
+      - game-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d chess_tourmaster"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  game-web:
+    build:
+      context: ./chess-tourmaster
+      dockerfile: Dockerfile.dev
+    env_file:
+      - ./chess-tourmaster/.env
+    environment:
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: "1"
+      DATABASE_URL: postgresql://postgres:postgres@game-db:5432/chess_tourmaster
+      NEXT_PUBLIC_PORTAL_API_BASE: ${PORTAL_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_PORTAL_URL: ${PORTAL_URL:-http://localhost:3000}
+      NEXT_PUBLIC_API_URL: ""
+      WATCHPACK_POLLING: "true"
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - ./chess-tourmaster:/app
+      - game-node-modules:/app/node_modules
+      - game-next:/app/.next
+    depends_on:
+      game-db:
+        condition: service_healthy
+
+volumes:
+  game-data:
+  game-node-modules:
+  game-next:

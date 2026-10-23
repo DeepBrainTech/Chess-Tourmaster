@@ -1,4 +1,4 @@
-name: chess-tourmaster-local
+name: chess-tourmaster
 
 services:
   game-db:
@@ -18,29 +18,23 @@ services:
   game-web:
     build:
       context: ./chess-tourmaster
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+        NEXT_PUBLIC_PORTAL_API_BASE: ${NEXT_PUBLIC_PORTAL_API_BASE:-https://api.deepbraintechnology.com}
+        NEXT_PUBLIC_PORTAL_URL: ${NEXT_PUBLIC_PORTAL_URL:-https://deepbraintechnology.com}
     env_file:
       - ./chess-tourmaster/.env
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
       DATABASE_URL: postgresql://postgres:postgres@game-db:5432/chess_tourmaster
-      # Browser requests use the host's main-page API, not a Docker service name.
-      NEXT_PUBLIC_PORTAL_API_BASE: ${PORTAL_API_URL:-http://localhost:8000}
-      NEXT_PUBLIC_PORTAL_URL: ${PORTAL_URL:-http://localhost:3000}
-      NEXT_PUBLIC_API_URL: ""
-      # Docker Desktop bind mounts on Windows need polling for hot reload.
-      WATCHPACK_POLLING: "true"
+      PORT: "3000"
     ports:
-      - "127.0.0.1:5173:5173"
-    volumes:
-      - ./chess-tourmaster:/app
-      - game-node-modules:/app/node_modules
-      - game-next:/app/.next
+      - "127.0.0.1:${GAME_PORT:-5173}:3000"
     depends_on:
       game-db:
         condition: service_healthy
 
 volumes:
   game-data:
-  game-node-modules:
-  game-next:
