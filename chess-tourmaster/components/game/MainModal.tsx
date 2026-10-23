@@ -12,6 +12,7 @@ type WinData = {
 };
 
 type LeaderboardEntry = {
+  portal_user_id: number;
   rank: number;
   username: string;
   total_levels: number;
@@ -23,9 +24,10 @@ type Props = {
   gameMode: 'classic' | 'math_tour';
   startLevel: number;
   winData: WinData | null;
-  username?: string;
+  accountId?: number;
   leaderboard: LeaderboardEntry[];
   leaderboardLoading: boolean;
+  leaderboardError?: string | null;
   leaderboardMode: LeaderboardMode;
   onSetMode: (mode: 'classic' | 'math_tour') => void;
   onOpenLeaderboard: () => void;
@@ -52,9 +54,10 @@ export default function MainModal({
   gameMode,
   startLevel,
   winData,
-  username,
+  accountId,
   leaderboard,
   leaderboardLoading,
+  leaderboardError,
   leaderboardMode,
   onSetMode,
   onOpenLeaderboard,
@@ -199,16 +202,20 @@ export default function MainModal({
               <div className="rounded-xl bg-black/20 border border-white/15 px-4 py-3 text-white/80 text-sm">
                 Loading...
               </div>
+            ) : leaderboardError ? (
+              <div role="alert" className="rounded-xl bg-black/20 border-red-400 px-4 py-3 text-red-200 text-sm">
+                {leaderboardError}
+              </div>
             ) : leaderboard.length === 0 ? (
               <div className="rounded-xl bg-black/20 border border-white/15 px-4 py-3 text-white/80 text-sm">
                 No records yet
               </div>
             ) : (
               leaderboard.map((entry) => {
-                const isCurrentUser = username != null && username !== '' && entry.username === username;
+                const isCurrentUser = accountId != null && entry.portal_user_id === accountId;
                 return (
                   <div
-                    key={`${entry.rank}-${entry.username}`}
+                    key={entry.portal_user_id}
                     className={`rounded-xl px-4 py-3 border ${
                       isCurrentUser
                         ? 'bg-white/15 border-amber-300 text-white'

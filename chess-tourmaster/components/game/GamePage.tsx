@@ -61,6 +61,7 @@ type Props = {
   initialPortalAssets: { coins: number; diamonds: number; flowers: number } | null;
 };
 type LeaderboardEntry = {
+  portal_user_id: number;
   rank: number;
   username: string;
   total_levels: number;
@@ -81,6 +82,7 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
   const [winData, setWinData] = useState<WinData | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
   const [leaderboardMode, setLeaderboardMode] = useState<LeaderboardMode>('classic');
   const [localHintCount, setLocalHintCount] = useState(0);
   const [localUndoCount, setLocalUndoCount] = useState(0);
@@ -206,28 +208,28 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
 
   const loadLeaderboard = useCallback(async (mode: LeaderboardMode) => {
     setLeaderboardLoading(true);
+    setLeaderboardError(null);
     try {
-      const res = await gameFetch(`/api/leaderboard?sort=levels&mode=${mode}&limit=10`);
+      const res = await gameFetch(`/api/leaderboard?sort=levels&mode=${mode}&limit=10`, { cache: 'no-store' });
       const data = await res.json();
-      if (!data?.success || !Array.isArray(data.data)) {
-        setLeaderboard([]);
-        return;
-      }
+      if (!res.ok || !data?.success || !Array.isArray(data.data)) throw new Error('leaderboard_failed');
       const parsed = data.data
         .filter(
-          (item: unknown): item is { username: string; rank?: unknown; total_levels?: unknown } =>
+          (item: unknown): item is { portal_user_id: number; username: string; rank?: unknown; total_levels?: unknown } =>
             typeof item === 'object' &&
             item !== null &&
             typeof (item as { username?: unknown }).username === 'string'
         )
-        .map((item: { username: string; rank?: unknown; total_levels?: unknown }, index: number) => ({
+        .map((item: { portal_user_id: number; username: string; rank?: unknown; total_levels?: unknown }, index: number) => ({
+          portal_user_id: item.portal_user_id,
           rank: typeof item.rank === 'number' ? item.rank : index + 1,
           username: item.username,
-          total_levels: normalizeUnlockedLevel(item.total_levels),
+          total_levels: typeof item.total_levels === 'number' ? Math.max(0, Math.floor(item.total_levels)) : 0,
         }));
       setLeaderboard(parsed);
     } catch {
       setLeaderboard([]);
+      setLeaderboardError('Could not load leaderboard. Please try again.');
     } finally {
       setLeaderboardLoading(false);
     }
@@ -680,9 +682,10 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
         gameMode={state.gameMode}
         startLevel={state.maxUnlockedLevel}
         winData={winData}
-        username={username}
+        accountId={accountId}
         leaderboard={leaderboard}
         leaderboardLoading={leaderboardLoading}
+        leaderboardError={leaderboardError}
         leaderboardMode={leaderboardMode}
         onSetMode={setMode}
         onOpenLeaderboard={() => {
