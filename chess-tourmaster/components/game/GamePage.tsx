@@ -22,7 +22,8 @@ import PortalButton from './PortalButton';
 import GameHeader, { TilesAndScoreBar } from './GameHeader';
 import Board from './Board';
 import MainModal from './MainModal';
-import { getApiBase, getPortalApiBase } from '@/lib/apiBase';
+import { getPortalApiBase } from '@/lib/apiBase';
+import { gameFetch } from '@/lib/portal-session';
 import { getHintMove } from '@/lib/game/hint';
 import { useGameInventory } from '@/hooks/useGameInventory';
 import type { Assets } from '@/lib/portal-client';
@@ -53,7 +54,7 @@ function normalizeStars(value: unknown): number {
 }
 
 type Props = {
-  token: string | null;
+  accountId: number;
   username: string;
   locale?: string | null;
   portalLocale?: 'en' | 'zn';
@@ -74,7 +75,7 @@ type ExchangeType = 'hint' | 'undo';
 const HINT_ITEM_ID = 'chess_tourmaster_hint';
 
 const UNDO_ITEM_ID = 'chess_tourmaster_undo';
-export default function GamePage({ token, username, initialPortalAssets, portalLocale }: Props) {
+export default function GamePage({ accountId, username, initialPortalAssets, portalLocale }: Props) {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
   const [modalType, setModalType] = useState<ModalType>('mode');
   const [winData, setWinData] = useState<WinData | null>(null);
@@ -102,7 +103,7 @@ export default function GamePage({ token, username, initialPortalAssets, portalL
     setLocalHintCount(counts.hint_count);
     setLocalUndoCount(counts.undo_count);
   }, []);
-  const { client: portal, buy: buyGameItem, use: consumeGameItem } = useGameInventory(portalBase, token, updateInventoryCounts);
+  const { client: portal, buy: buyGameItem, use: consumeGameItem } = useGameInventory(portalBase, accountId, updateInventoryCounts);
   const hintCount = localHintCount;
   const undoCount = localUndoCount;
   const [exchangeCost, setExchangeCost] = useState<Assets | null>(null);
@@ -127,15 +128,11 @@ export default function GamePage({ token, username, initialPortalAssets, portalL
   }, [portal]);
 
   const loadProgress = useCallback(async (mode: 'classic' | 'math_tour') => {
-    if (!token) return null;
+    if (!accountId) return null;
     try {
       const [progressRes, statsRes] = await Promise.all([
-        fetch(`${getApiBase()}/api/progress/load?game_mode=${mode}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${getApiBase()}/api/levels/stats?game_mode=${mode}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+        gameFetch(`/api/progress/load?game_mode=${mode}`),
+        gameFetch(`/api/levels/stats?game_mode=${mode}`),
       ]);
 
       const progressData = await progressRes.json();
@@ -173,20 +170,19 @@ export default function GamePage({ token, username, initialPortalAssets, portalL
     } catch {
       return null;
     }
-  }, [token]);
+  }, [accountId]);
 
   const saveProgress = useCallback(
     async (
       maxUnlockedLevel: number,
       levelData?: { level: number; moves_count: number; time_seconds: number; stars: number; game_mode: 'classic' | 'math_tour' }
     ) => {
-      if (!token) return;
+      if (!accountId) return;
       try {
-        await fetch(`${getApiBase()}/api/progress/save`, {
+        await gameFetch('/api/progress/save', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             total_levels: maxUnlockedLevel,
@@ -205,13 +201,13 @@ export default function GamePage({ token, username, initialPortalAssets, portalL
         console.error(e);
       }
     },
-    [token]
+    [accountId]
   );
 
   const loadLeaderboard = useCallback(async (mode: LeaderboardMode) => {
     setLeaderboardLoading(true);
     try {
-      const res = await fetch(`${getApiBase()}/api/leaderboard?sort=levels&mode=${mode}&limit=10`);
+      const res = await gameFetch(`/api/leaderboard?sort=levels&mode=${mode}&limit=10`);
       const data = await res.json();
       if (!data?.success || !Array.isArray(data.data)) {
         setLeaderboard([]);
@@ -437,7 +433,7 @@ export default function GamePage({ token, username, initialPortalAssets, portalL
   }, [state.savedGridConfig]);
 
   const undoMove = useCallback(async () => {
-    if (!token || undoLoading || state.history.length === 0 || !state.isPlaying) return;
+    if (!accountId || undoLoading || state.history.length === 0 || !state.isPlaying) return;
     if (undoCount <= 0) {
       if (!portalBase) {
         setMessage({
@@ -453,8 +449,8 @@ export default function GamePage({ token, username, initialPortalAssets, portalL
     setUndoLoading(true);
     try {
       const used = await consumeGameItem(UNDO_ITEM_ID, async () => {
-        const response = await fetch(`${getApiBase()}/api/undo/use`, {
-          method: 'POST', headers: { Authorization: `Bearer ${token}` },
+        const response = await gameFetch('/api/undo/use', {
+          method: 'POST',
         });
         const data = await response.json().catch(() => null);
         if (typeof data?.data?.undo_count === 'number') setLocalUndoCount(data.data.undo_count);
@@ -473,7 +469,7 @@ export default function GamePage({ token, username, initialPortalAssets, portalL
     } finally {
       setUndoLoading(false);
     }
-  }, [portalBase, state.history.length, state.isPlaying, token, undoCount, undoLoading, loadExchange, consumeGameItem]);
+  }, [portalBase, state.history.length, state.isPlaying, accountId, undoCount, undoLoading, loadExchange, consumeGameItem]);
 
   const setMode = useCallback((mode: 'classic' | 'math_tour') => {
     dispatch({ type: 'SET_MODE', payload: mode });
@@ -493,12 +489,12 @@ export default function GamePage({ token, username, initialPortalAssets, portalL
   );
 
   const executeHint = useCallback(async (): Promise<'used' | 'need_exchange' | 'failed'> => {
-    if (!token || !state.isPlaying || hintLoading || hintConfirmSubmitting) return 'failed';
+    if (!accountId || !state.isPlaying || hintLoading || hintConfirmSubmitting) return 'failed';
     setHintLoading(true);
     try {
       const used = await consumeGameItem(HINT_ITEM_ID, async () => {
-        const response = await fetch(`${getApiBase()}/api/hint/use`, {
-          method: 'POST', headers: { Authorization: `Bearer ${token}` },
+        const response = await gameFetch('/api/hint/use', {
+          method: 'POST',
         });
         const data = await response.json().catch(() => null);
         if (typeof data?.data?.hint_count === 'number') setLocalHintCount(data.data.hint_count);
@@ -529,12 +525,12 @@ export default function GamePage({ token, username, initialPortalAssets, portalL
     } finally {
       setHintLoading(false);
     }
-  }, [hintConfirmSubmitting, hintLoading, state, token, consumeGameItem]);
+  }, [hintConfirmSubmitting, hintLoading, state, accountId, consumeGameItem]);
 
   const openHintExchangeDialog = useCallback(() => loadExchange('hint'), [loadExchange]);
 
   const handleHint = useCallback(async () => {
-    if (!token || !state.isPlaying || hintLoading || hintConfirmSubmitting) return;
+    if (!accountId || !state.isPlaying || hintLoading || hintConfirmSubmitting) return;
     if (hintCount <= 0) {
       if (!portalBase) {
         setMessage({
@@ -555,10 +551,10 @@ export default function GamePage({ token, username, initialPortalAssets, portalL
       await openHintExchangeDialog();
       return;
     }
-  }, [executeHint, hintConfirmSubmitting, hintCount, hintLoading, openHintExchangeDialog, portalBase, state.isPlaying, token]);
+  }, [executeHint, hintConfirmSubmitting, hintCount, hintLoading, openHintExchangeDialog, portalBase, state.isPlaying, accountId]);
 
   const confirmHintExchange = useCallback(async () => {
-    if (exchangeBusy.current || hintConfirmSubmitting || hintConfirmLoading || !exchangeCost || !token) return;
+    if (exchangeBusy.current || hintConfirmSubmitting || hintConfirmLoading || !exchangeCost || !accountId) return;
     exchangeBusy.current = true;
     setHintConfirmSubmitting(true);
     setHintConfirmError(null);
@@ -572,7 +568,7 @@ export default function GamePage({ token, username, initialPortalAssets, portalL
       exchangeBusy.current = false;
       setHintConfirmSubmitting(false);
     }
-  }, [buyGameItem, exchangeType, exchangeCost, hintConfirmLoading, hintConfirmSubmitting, token]);
+  }, [buyGameItem, exchangeType, exchangeCost, hintConfirmLoading, hintConfirmSubmitting, accountId]);
 
   const isHomeView = modalType === 'mode';
 

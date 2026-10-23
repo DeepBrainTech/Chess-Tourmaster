@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+build
+coverage
+.git
+.env
+.env.*
+*.log
+*.tsbuildinfo
+.agents
+.codex
+.cursor
+.vscode

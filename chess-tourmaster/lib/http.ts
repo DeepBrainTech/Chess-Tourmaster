@@ -1,25 +1,19 @@
-// 固定允许的前端来源（不依赖环境变量）
-const corsAllowedOrigins = [
-  'https://chess-tourmaster.pages.dev',
-  'https://chess-tourmaster.deepbraintechnology.com',
-];
-
-function resolveAllowOrigin(requestOrigin: string | null): string {
-  if (requestOrigin && corsAllowedOrigins.includes(requestOrigin)) return requestOrigin;
-  if (requestOrigin && corsAllowedOrigins.length === 0) return requestOrigin;
-  if (corsAllowedOrigins.length > 0) return corsAllowedOrigins[0];
-  return '';
-}
-
 export function getCorsHeaders(requestOrigin?: string | null): HeadersInit {
-  const allowOrigin = resolveAllowOrigin(requestOrigin ?? null);
+  // 未配置白名单时不允许跨域；同源请求不受影响。
+  const allowedOrigins = (process.env.CORS_ORIGINS ?? '')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean);
   const headers: HeadersInit = {
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
     'Access-Control-Allow-Headers': 'Authorization, Content-Type, Accept, Origin, X-Requested-With',
     'Access-Control-Max-Age': '86400',
-    'Access-Control-Allow-Origin': allowOrigin,
     Vary: 'Origin',
   };
+  if (requestOrigin && allowedOrigins.includes(requestOrigin)) {
+    headers['Access-Control-Allow-Origin'] = requestOrigin;
+    headers['Access-Control-Allow-Credentials'] = 'true';
+  }
   return headers;
 }
 

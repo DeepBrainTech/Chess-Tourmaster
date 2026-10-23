@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Chess Tourmaster',
+  title: 'Knightours Chess',
   description: 'A challenging chess knight tour puzzle game',
   icons: { icon: '/icon.png' },
 }

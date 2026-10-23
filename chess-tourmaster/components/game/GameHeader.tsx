@@ -66,7 +66,7 @@ export default function GameHeader({
       <div className="min-w-0 flex-1" aria-hidden="true" />
       <div className="min-w-0 flex shrink-0 flex-col items-center text-center">
         <h1 className="text-xl md:text-3xl lg:text-4xl text-rose-500 font-bold fantasy-font tracking-wider drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
-          <i className="fas fa-chess-board mr-2" /> Tourmaster
+          <i className="fas fa-chess-board mr-2" /> Knightours Chess
         </h1>
         <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 lg:gap-x-4 xl:gap-x-6 text-sm md:text-base lg:text-lg text-gray-300 mt-1">
           <span className="font-bold text-white">

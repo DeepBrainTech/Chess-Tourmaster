@@ -1,14 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { PortalInventoryClient, gameAccountId } from '@/lib/portal-inventory';
+import { PortalInventoryClient } from '@/lib/portal-inventory';
 import type { InventoryDelivery } from '@/lib/portal-client';
-import { getApiBase } from '@/lib/apiBase';
+import { gameFetch } from '@/lib/portal-session';
 
 export type InventoryCounts = { hint_count: number; undo_count: number };
 
-export function useGameInventory(base: string, token: string | null, onCounts: (counts: InventoryCounts) => void) {
-  const userId = gameAccountId(token);
+export function useGameInventory(base: string, userId: number, onCounts: (counts: InventoryCounts) => void) {
   const currentAccount = useRef(userId);
   const countsCallback = useRef(onCounts);
   currentAccount.current = userId;
@@ -20,23 +19,23 @@ export function useGameInventory(base: string, token: string | null, onCounts: (
     if (currentAccount.current === userId) countsCallback.current(counts);
   }, [userId]);
   const refresh = useCallback(async () => {
-    if (!token) return;
-    const res = await fetch(`${getApiBase()}/api/inventory`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+    if (!userId) return;
+    const res = await gameFetch('/api/inventory', { cache: 'no-store' });
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error('Could not load game inventory');
     applyCounts(data.data);
-  }, [token, applyCounts]);
+  }, [userId, applyCounts]);
   const claim = useCallback(async (delivery: InventoryDelivery) => {
-    const res = await fetch(`${getApiBase()}/api/inventory/claim`, {
-      method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    const res = await gameFetch('/api/inventory/claim', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ grant_token: delivery.grant_token }),
     });
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error('Inventory delivery pending. Please retry.');
     applyCounts(data.data);
-  }, [token, applyCounts]);
+  }, [applyCounts]);
   const recover = useCallback(() => {
-    if (!userId || !token) return Promise.resolve();
+    if (!userId) return Promise.resolve();
     if (recovering.current) return recovering.current;
     const pending = (async () => {
       await client.assertAccount();
@@ -57,17 +56,17 @@ export function useGameInventory(base: string, token: string | null, onCounts: (
     });
     recovering.current = tracked;
     return recovering.current;
-  }, [client, claim, userId, token]);
+  }, [client, claim, userId]);
   useEffect(() => {
     recovering.current = null;
     applyCounts({ hint_count: 0, undo_count: 0 });
-    if (!token) return;
+    if (!userId) return;
     void refresh().catch(() => undefined);
     const sync = () => { void recover().catch(() => undefined).then(refresh).catch(() => undefined); };
     sync();
     window.addEventListener('focus', sync);
     return () => window.removeEventListener('focus', sync);
-  }, [token, refresh, recover, applyCounts]);
+  }, [userId, refresh, recover, applyCounts]);
   const buy = useCallback(async (itemId: string) => {
     const delivery = await client.buyItem(itemId);
     await claim(delivery);

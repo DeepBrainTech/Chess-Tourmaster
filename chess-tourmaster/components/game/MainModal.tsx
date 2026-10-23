@@ -239,7 +239,7 @@ export default function MainModal({
               <i className="fas fa-chess-king text-rose-500" />
             </div>
             <h2 className="text-3xl font-bold text-white mb-2 fantasy-font">
-              Chess Tourmaster
+              Knightours Chess
             </h2>
             <p className="text-sm text-gray-400 mb-4">Select your game mode:</p>
             <div className="space-y-3">
