@@ -1,26 +1,17 @@
 import type { GameMode, LevelConfig } from './types';
 import { generateLevelConfig } from './levelGenerator';
+export { MAX_LEVELS } from './rules';
 
-export const MAX_LEVELS = 100;
-
-const levelPool: Record<GameMode, LevelConfig[]> = {
-  classic: [],
-  math_tour: [],
-};
-
-function buildLevelPool(mode: GameMode): LevelConfig[] {
-  const levels: LevelConfig[] = [];
-  for (let level = 1; level <= MAX_LEVELS; level++) {
-    levels.push(generateLevelConfig(level, mode));
-  }
-  return levels;
-}
+const levels = new Map<string, LevelConfig>();
 
 export function getFixedLevelConfig(level: number, mode: GameMode): LevelConfig {
-  if (levelPool[mode].length === 0) {
-    levelPool[mode] = buildLevelPool(mode);
+  const key = `${mode}:${level}`;
+  let config = levels.get(key);
+  if (!config) {
+    config = generateLevelConfig(level, mode);
+    levels.set(key, config);
   }
-  const normalizedLevel = Math.min(Math.max(level, 1), MAX_LEVELS);
-  return levelPool[mode][normalizedLevel - 1];
+  return { ...config, grid: config.grid.map(row => row.map(tile => ({ ...tile }))),
+    knightPos: { ...config.knightPos }, kingPos: { ...config.kingPos },
+    solution: config.solution?.map(p => ({ ...p })) };
 }
-

@@ -24,7 +24,8 @@ import Board from './Board';
 import MainModal from './MainModal';
 import { getPortalApiBase } from '@/lib/apiBase';
 import { gameFetch } from '@/lib/portal-session';
-import { getHintMove } from '@/lib/game/hint';
+import { GameSessionClient, GameServiceError } from '@/lib/game/sessionClient';
+import { useGameClock } from '@/hooks/useGameClock';
 import { useGameInventory } from '@/hooks/useGameInventory';
 import type { Assets } from '@/lib/portal-client';
 
@@ -78,6 +79,8 @@ const HINT_ITEM_ID = 'chess_tourmaster_hint';
 const UNDO_ITEM_ID = 'chess_tourmaster_undo';
 export default function GamePage({ accountId, username, initialPortalAssets, portalLocale }: Props) {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
+  const activeMode = useRef(state.gameMode);
+  activeMode.current = state.gameMode;
   const [modalType, setModalType] = useState<ModalType>('mode');
   const [winData, setWinData] = useState<WinData | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -97,7 +100,12 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
   const [hintTarget, setHintTarget] = useState<{ r: number; c: number } | null>(null);
   const [message, setMessage] = useState<{ text: string; className: string } | null>(null);
   const [shake, setShake] = useState(false);
-  const fireStartRef = useRef<number>(0);
+  const session = useRef(new GameSessionClient());
+  const operationBusy = useRef(false);
+  const [starting, setStarting] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const paused = modalType !== 'none' || hintConfirmOpen || hintLoading || undoLoading || starting || hidden;
   const lastSpokenSecondRef = useRef<number>(4);
   const wonByCaptureRef = useRef(false);
   const portalBase = getPortalApiBase();
@@ -138,6 +146,7 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
       ]);
 
       const progressData = await progressRes.json();
+      if (activeMode.current !== mode) return null;
       if (progressData.success && progressData.data?.total_levels != null) {
         dispatch({
           type: 'SET_MAX_UNLOCKED_LEVEL',
@@ -152,6 +161,7 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
       }
 
       const statsData = await statsRes.json();
+      if (activeMode.current !== mode) return null;
       if (statsData.success && Array.isArray(statsData.data?.levels)) {
         const starsMap: Record<number, number> = {};
         for (const item of statsData.data.levels) {
@@ -173,38 +183,6 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
       return null;
     }
   }, [accountId]);
-
-  const saveProgress = useCallback(
-    async (
-      maxUnlockedLevel: number,
-      levelData?: { level: number; moves_count: number; time_seconds: number; stars: number; game_mode: 'classic' | 'math_tour' }
-    ) => {
-      if (!accountId) return;
-      try {
-        await gameFetch('/api/progress/save', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            total_levels: maxUnlockedLevel,
-            level_data: levelData,
-          }),
-        }).then(async (res) => {
-          const data = await res.json().catch(() => null);
-          if (data?.success && typeof data.data?.hint_count === 'number') {
-            setLocalHintCount(Math.max(0, Math.floor(data.data.hint_count)));
-          }
-          if (data?.success && typeof data.data?.undo_count === 'number') {
-            setLocalUndoCount(Math.max(0, Math.floor(data.data.undo_count)));
-          }
-        });
-      } catch (e) {
-        console.error(e);
-      }
-    },
-    [accountId]
-  );
 
   const loadLeaderboard = useCallback(async (mode: LeaderboardMode) => {
     setLeaderboardLoading(true);
@@ -253,71 +231,54 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
     loadLeaderboard(leaderboardMode);
   }, [modalType, leaderboardMode, loadLeaderboard]);
 
-  // Game timer
   useEffect(() => {
-    if (!state.isPlaying) return;
-    const interval = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - state.gameStartTime) / 1000);
-      dispatch({ type: 'SET_GAME_TIME', payload: elapsed });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [state.isPlaying, state.gameStartTime]);
+    const update = () => setHidden(document.hidden);
+    update();
+    document.addEventListener('visibilitychange', update);
+    return () => document.removeEventListener('visibilitychange', update);
+  }, []);
 
-  // Fire timer (3s on fire tile) + countdown voice
   useEffect(() => {
-    if (!state.isPlaying || state.grid.length === 0) return;
-    const tile = state.grid[state.knightPos.r]?.[state.knightPos.c];
-    if (tile?.hasFire) {
-      if (fireStartRef.current === 0) fireStartRef.current = Date.now();
-      const interval = setInterval(() => {
-        const remaining = 3000 - (Date.now() - fireStartRef.current);
-        const seconds = Math.ceil(remaining / 1000);
-        if (seconds >= 1 && seconds <= 3 && seconds !== lastSpokenSecondRef.current) {
-          lastSpokenSecondRef.current = seconds;
-          speak(seconds.toString());
-        }
-        if (remaining <= 0) {
-          playBurn();
-          setModalType('lose');
-          dispatch({ type: 'LOSE_LEVEL' });
-        }
-      }, 100);
-      return () => clearInterval(interval);
-    } else {
-      fireStartRef.current = 0;
-      lastSpokenSecondRef.current = 4;
-      cancelSpeak();
-    }
-  }, [state.isPlaying, state.knightPos, state.grid]);
+    if (!session.current.id || starting) return;
+    void session.current.transition(state.isPlaying && !paused ? 'resume' : 'pause').catch(() => {
+      setMessage({ text: 'Could not sync game timer. Check your connection.', className: 'text-rose-300' });
+    });
+  }, [paused, state.isPlaying, state.gameStartTime, starting]);
+
+  const onFire = Boolean(state.grid[state.knightPos.r]?.[state.knightPos.c]?.hasFire);
+  useGameClock(state.gameStartTime, state.isPlaying && !paused,
+    `${state.knightPos.r},${state.knightPos.c}`, onFire, (seconds, remaining) => {
+      if (seconds !== state.gameTimeSeconds) dispatch({ type: 'SET_GAME_TIME', payload: seconds });
+      if (!state.isPlaying || paused) { cancelSpeak(); return; }
+      if (!onFire) { lastSpokenSecondRef.current = 4; return; }
+      const countdown = Math.ceil(remaining / 1000);
+      if (countdown >= 1 && countdown <= 3 && countdown !== lastSpokenSecondRef.current) {
+        lastSpokenSecondRef.current = countdown;
+        speak(String(countdown));
+      }
+      if (remaining <= 0) {
+        playBurn();
+        setModalType('lose');
+        dispatch({ type: 'LOSE_LEVEL' });
+      }
+    });
 
   // Stuck check after move / no remaining king approach tiles
+  const unwinnable = state.isPlaying && state.grid.length > 0 && (isStuck(state) || isKingAccessExhausted(state));
   useEffect(() => {
-    if (!state.isPlaying || state.grid.length === 0) return;
-    if (isStuck(state) || isKingAccessExhausted(state)) {
+    if (paused) return;
+    if (unwinnable) {
       const t = setTimeout(() => {
         setModalType('lose');
         dispatch({ type: 'LOSE_LEVEL' });
       }, 500);
       return () => clearTimeout(t);
     }
-  }, [state.isPlaying, state.grid, state.knightPos, state.tilesLeft, state.history.length]);
-
-  // Win by capture: knight moved to King (reducer set isPlaying=false), trigger win modal
-  useEffect(() => {
-    if (
-      !state.isPlaying &&
-      state.grid.length > 0 &&
-      state.knightPos.r === state.kingPos.r &&
-      state.knightPos.c === state.kingPos.c &&
-      !wonByCaptureRef.current
-    ) {
-      wonByCaptureRef.current = true;
-      void handleWin();
-    }
-  }, [state.isPlaying, state.knightPos.r, state.knightPos.c, state.kingPos.r, state.kingPos.c, state.grid.length]);
+  }, [paused, unwinnable]);
 
   const handleMove = useCallback(
     (r: number, c: number) => {
+      if (!state.isPlaying || paused || operationBusy.current) return;
       setHintTarget(null);
       const tile = state.grid[r]?.[c];
       if (!tile || tile.type === 'void' || tile.visited) return;
@@ -358,65 +319,74 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
         setTimeout(() => setMessage(null), 1500);
       }
     },
-    [state]
+    [state, paused]
   );
 
-  async function handleWin() {
-    playVictory();
-    const elapsed = (Date.now() - state.gameStartTime) / 1000;
-    let stars: number;
-    if (state.gameMode === 'math_tour') {
-      const r = state.requiredScore;
-      const s = state.currentScore;
-      if (r <= 0) stars = 3;
-      else if (s >= r * 1.2) stars = 3;
-      else if (s >= r * 1.08) stars = 2;
-      else stars = 1;
-    } else {
-      stars = 1;
-      if (elapsed <= state.parTime) stars = 3;
-      else if (elapsed <= state.parTime * 1.5) stars = 2;
+  const handleWin = useCallback(async () => {
+    if (operationBusy.current) return;
+    operationBusy.current = true;
+    setStarting(true);
+    setSaveFailed(false);
+    try {
+      await session.current.transition('pause');
+      const saved = await session.current.finish(state.history.map(entry => entry.prevPos));
+      updateInventoryCounts(saved);
+      dispatch({ type: 'SET_MAX_UNLOCKED_LEVEL', payload: saved.total_levels });
+      dispatch({ type: 'UPSERT_LEVEL_STAR', payload: { level: state.level, stars: saved.stars } });
+      dispatch({ type: 'WIN_LEVEL' });
+      setWinData({ level: state.level, time: formatTime(saved.time_seconds), stars: saved.stars,
+        isFinalLevel: state.level >= MAX_LEVELS });
+      setHintTarget(null);
+      playVictory();
+      setModalType('win');
+    } catch {
+      setSaveFailed(true);
+      setMessage({ text: 'Could not save your win. Retry to save progress.', className: 'text-rose-300' });
+    } finally {
+      operationBusy.current = false;
+      setStarting(false);
     }
-    const nextUnlockedLevel = Math.min(MAX_LEVELS, Math.max(state.maxUnlockedLevel, state.level + 1));
-    await saveProgress(nextUnlockedLevel, {
-      level: state.level,
-      moves_count: state.history.length,
-      time_seconds: state.gameTimeSeconds,
-      stars,
-      game_mode: state.gameMode,
-    });
-    dispatch({ type: 'SET_MAX_UNLOCKED_LEVEL', payload: nextUnlockedLevel });
-    dispatch({ type: 'UPSERT_LEVEL_STAR', payload: { level: state.level, stars } });
-    dispatch({ type: 'WIN_LEVEL' });
-    setWinData({
-      level: state.level,
-      time: formatTime(state.gameTimeSeconds),
-      stars,
-      isFinalLevel: state.level >= MAX_LEVELS,
-    });
-    setHintTarget(null);
-    setModalType('win');
-  }
+  }, [state, updateInventoryCounts]);
+
+  useEffect(() => {
+    if (!state.isPlaying && state.grid.length > 0 && state.knightPos.r === state.kingPos.r
+      && state.knightPos.c === state.kingPos.c && !wonByCaptureRef.current) {
+      wonByCaptureRef.current = true;
+      void handleWin();
+    }
+  }, [state, handleWin]);
 
   const startLevel = useCallback(
-    (level: number, useSaved: boolean) => {
+    async (level: number, useSaved: boolean) => {
+      if (operationBusy.current) return;
+      operationBusy.current = true;
+      setStarting(true);
+      setSaveFailed(false);
       initSound();
-      wonByCaptureRef.current = false;
-      let config;
-      if (useSaved && state.savedGridConfig && state.savedGridConfig.level === level) {
-        config = state.savedGridConfig;
-      } else {
-        config = getFixedLevelConfig(level, state.gameMode);
+      try {
+        await session.current.start(level, state.gameMode);
+        const config = useSaved && state.savedGridConfig?.level === level
+          ? state.savedGridConfig : getFixedLevelConfig(level, state.gameMode);
+        wonByCaptureRef.current = false;
         dispatch({ type: 'SET_SAVED_CONFIG', payload: config });
+        dispatch({ type: 'START_LEVEL', payload: config });
+        setHintTarget(null);
+        setMessage(null);
+        setModalType('none');
+      } catch (error) {
+        setMessage({ text: error instanceof GameServiceError && error.code === 'VERSION_MISMATCH'
+          ? 'The game has been updated. Refresh to load the latest levels.'
+          : 'Could not start level. Please try again.', className: 'text-rose-300' });
+      } finally {
+        operationBusy.current = false;
+        setStarting(false);
       }
-      dispatch({ type: 'START_LEVEL', payload: config });
-      setHintTarget(null);
-      setModalType('none');
     },
     [state.savedGridConfig, state.gameMode]
   );
 
   const nextLevel = useCallback(() => {
+    if (operationBusy.current) return;
     if (state.level >= MAX_LEVELS) {
       dispatch({ type: 'SET_SAVED_CONFIG', payload: null });
       setModalType('mode');
@@ -427,15 +397,12 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
   }, [state.level, startLevel]);
 
   const restartLevel = useCallback(() => {
-    const saved = state.savedGridConfig;
-    if (!saved) return;
-    dispatch({ type: 'START_LEVEL', payload: saved });
-    setHintTarget(null);
-    setModalType('none');
-  }, [state.savedGridConfig]);
+    if (saveFailed) return;
+    void startLevel(state.level, true);
+  }, [state.level, startLevel, saveFailed]);
 
   const undoMove = useCallback(async () => {
-    if (!accountId || undoLoading || state.history.length === 0 || !state.isPlaying) return;
+    if (!accountId || paused || operationBusy.current || state.history.length === 0 || !state.isPlaying) return;
     if (undoCount <= 0) {
       if (!portalBase) {
         setMessage({
@@ -449,7 +416,9 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
       return;
     }
     setUndoLoading(true);
+    operationBusy.current = true;
     try {
+      await session.current.transition('pause');
       const used = await consumeGameItem(UNDO_ITEM_ID, async () => {
         const response = await gameFetch('/api/undo/use', {
           method: 'POST',
@@ -469,71 +438,64 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
       });
       setTimeout(() => setMessage(null), 1800);
     } finally {
+      operationBusy.current = false;
       setUndoLoading(false);
     }
-  }, [portalBase, state.history.length, state.isPlaying, accountId, undoCount, undoLoading, loadExchange, consumeGameItem]);
+  }, [paused, portalBase, state.history.length, state.isPlaying, accountId, undoCount, loadExchange, consumeGameItem]);
 
   const setMode = useCallback((mode: 'classic' | 'math_tour') => {
+    if (operationBusy.current) return;
+    activeMode.current = mode;
     dispatch({ type: 'SET_MODE', payload: mode });
     setHintTarget(null);
-    loadProgress(mode);
     setModalType('welcome');
-  }, [loadProgress]);
+  }, []);
 
   const handleSelectLevel = useCallback(
     (selectedLevel: number) => {
+      if (operationBusy.current || saveFailed) return;
       const level = Math.max(1, Math.min(MAX_LEVELS, Math.floor(selectedLevel)));
       if (level > state.maxUnlockedLevel || level === state.level) return;
       dispatch({ type: 'SET_SAVED_CONFIG', payload: null });
       startLevel(level, false);
     },
-    [state.level, state.maxUnlockedLevel, startLevel]
+    [state.level, state.maxUnlockedLevel, startLevel, saveFailed]
   );
 
   const executeHint = useCallback(async (): Promise<'used' | 'need_exchange' | 'failed'> => {
-    if (!accountId || !state.isPlaying || hintLoading || hintConfirmSubmitting) return 'failed';
+    if (!accountId || !state.isPlaying || paused || operationBusy.current) return 'failed';
+    operationBusy.current = true;
     setHintLoading(true);
     try {
-      const used = await consumeGameItem(HINT_ITEM_ID, async () => {
-        const response = await gameFetch('/api/hint/use', {
-          method: 'POST',
-        });
-        const data = await response.json().catch(() => null);
-        if (typeof data?.data?.hint_count === 'number') setLocalHintCount(data.data.hint_count);
-        return response.ok && data?.success === true;
-      });
-      if (!used) return 'need_exchange';
-
-      const hint = getHintMove(state);
-      if (hint.type === 'next_move') {
-        setHintTarget(hint.move);
-      } else {
-        setHintTarget(null);
-        setMessage({
-          text: "You can't win from here. Please restart.",
-          className: 'text-rose-300',
-        });
-        setTimeout(() => setMessage(null), 2400);
-      }
+      await session.current.transition('pause');
+      const hint = await session.current.hint(state.history.map(entry => entry.prevPos));
+      setLocalHintCount(hint.hint_count);
+      setHintTarget(hint.move);
       return 'used';
-    } catch {
+    } catch (error) {
+      if (error instanceof GameServiceError && error.code === 'NO_HINT_LEFT') return 'need_exchange';
       setHintTarget(null);
       setMessage({
-        text: 'Hint service unavailable.',
+        text: error instanceof GameServiceError && error.code === 'NO_WIN_PATH'
+          ? 'No winning route remains. Undo or restart. No hint used.'
+          : error instanceof GameServiceError && error.code === 'SEARCH_EXHAUSTED'
+            ? 'Could not verify a winning route. No hint used.' : 'Hint service unavailable. Retry safely.',
         className: 'text-rose-300',
       });
       setTimeout(() => setMessage(null), 2000);
       return 'failed';
     } finally {
+      operationBusy.current = false;
       setHintLoading(false);
     }
-  }, [hintConfirmSubmitting, hintLoading, state, accountId, consumeGameItem]);
+  }, [paused, state, accountId]);
 
   const openHintExchangeDialog = useCallback(() => loadExchange('hint'), [loadExchange]);
 
   const handleHint = useCallback(async () => {
-    if (!accountId || !state.isPlaying || hintLoading || hintConfirmSubmitting) return;
-    if (hintCount <= 0) {
+    if (!accountId || !state.isPlaying || paused || operationBusy.current) return;
+    const result = await executeHint();
+    if (result === 'need_exchange') {
       if (!portalBase) {
         setMessage({
           text: 'No hints left.',
@@ -547,13 +509,7 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
       return;
     }
 
-    const result = await executeHint();
-    if (result === 'need_exchange') {
-      setExchangeType('hint');
-      await openHintExchangeDialog();
-      return;
-    }
-  }, [executeHint, hintConfirmSubmitting, hintCount, hintLoading, openHintExchangeDialog, portalBase, state.isPlaying, accountId]);
+  }, [executeHint, paused, openHintExchangeDialog, portalBase, state.isPlaying, accountId]);
 
   const confirmHintExchange = useCallback(async () => {
     if (exchangeBusy.current || hintConfirmSubmitting || hintConfirmLoading || !exchangeCost || !accountId) return;
@@ -581,7 +537,10 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
       <PortalButton
         portalLocale={portalLocale}
         isHomeView={isHomeView}
-        onBackHome={() => setModalType('mode')}
+        onBackHome={() => {
+          if (operationBusy.current || saveFailed) return;
+          setModalType('mode');
+        }}
       />
 
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
@@ -597,7 +556,6 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
             maxUnlockedLevel={state.maxUnlockedLevel}
             levelStars={state.levelStars}
             username={username}
-            tilesLeft={state.tilesLeft}
             onSelectLevel={handleSelectLevel}
             onRestart={restartLevel}
             onUndo={undoMove}
@@ -618,7 +576,7 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
             requiredScore={state.requiredScore}
             history={state.history}
           />
-          <Board state={state} onMove={handleMove} shake={shake} hintTarget={hintTarget} />
+          <Board state={state} onMove={handleMove} shake={shake} hintTarget={hintTarget} locked={paused} />
           {hintConfirmOpen && (
             <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 px-4">
               <div className="w-full max-w-md rounded-2xl border border-slate-600 bg-slate-900/95 p-5 text-white shadow-2xl">
@@ -655,15 +613,6 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
               </div>
             </div>
           )}
-          {message && (
-            <div
-              className={`absolute inset-0 flex items-center justify-center pointer-events-none z-50 transition-opacity duration-300 ${message.className}`}
-            >
-              <span className="text-4xl md:text-6xl font-bold drop-shadow-md fantasy-font">
-                {message.text}
-              </span>
-            </div>
-          )}
         </>
       )}
 
@@ -677,7 +626,23 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
         </p>
       </div>
 
+      {starting && <div role="status" className="fixed top-4 z-[80] rounded-lg bg-slate-900 px-4 py-2 text-white">Connecting…</div>}
+      {message && !saveFailed && (
+        <div role="status" className={`fixed bottom-6 z-[80] max-w-lg rounded-lg bg-slate-900 px-4 py-3 text-center text-sm pointer-events-none ${message.className}`}>
+          {message.text}
+        </div>
+      )}
+      {saveFailed && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-6">
+          <div role="alert" className="rounded-xl bg-slate-900 border border-slate-600 p-6 text-center text-white">
+            <p>Your win has not been saved. Retry to keep your progress.</p>
+            <button type="button" disabled={starting} onClick={() => void handleWin()}
+              className="mt-4 rounded-lg bg-amber-700 px-5 py-2 disabled:opacity-50">Retry saving</button>
+          </div>
+        </div>
+      )}
       <MainModal
+        busy={starting}
         type={modalType}
         gameMode={state.gameMode}
         startLevel={state.maxUnlockedLevel}

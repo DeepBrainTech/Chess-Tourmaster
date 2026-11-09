@@ -6,12 +6,15 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "next lint --max-warnings 0",
     "db:init": "prisma generate && prisma db push",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:deploy": "prisma db push",
-    "test:commerce": "node --test tests/*.test.cjs"
+    "test:commerce": "node --test tests/*.test.cjs",
+    "test": "node --test tests/*.test.cjs",
+    "typecheck": "tsc --noEmit --incremental false",
+    "check": "npm run lint && npm run typecheck && npm test"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

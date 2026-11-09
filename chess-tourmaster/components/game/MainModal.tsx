@@ -1,6 +1,7 @@
 'use client';
 
 import type { ModalType, ThemeName } from '@/lib/game/types';
+import { MATH_STAR_RATIOS } from '@/lib/game/rules';
 
 type WinData = {
   level: number;
@@ -20,6 +21,7 @@ type LeaderboardEntry = {
 type LeaderboardMode = 'classic' | 'math_tour';
 
 type Props = {
+  busy?: boolean;
   type: ModalType;
   gameMode: 'classic' | 'math_tour';
   startLevel: number;
@@ -50,6 +52,7 @@ const THEME_BUTTONS: { name: ThemeName; label: string; btnClass: string }[] = [
 ];
 
 export default function MainModal({
+  busy = false,
   type,
   gameMode,
   startLevel,
@@ -75,6 +78,8 @@ export default function MainModal({
 
   return (
     <div
+      inert={busy || undefined}
+      aria-busy={busy}
       className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop"
       onClick={isOverlayModal ? onCloseOverlay : undefined}
       role={isOverlayModal ? 'button' : undefined}
@@ -140,7 +145,7 @@ export default function MainModal({
             </li>
             <li className="flex items-start">
               <i className="fas fa-star w-6 text-yellow-400 mt-1" />
-              <span><strong>Stars:</strong> {isMathTour ? 'By score (≥110% = 3★, ≥105% = 2★).' : 'By time (faster = more stars).'}</span>
+              <span><strong>Stars:</strong> {isMathTour ? `By score (≥${MATH_STAR_RATIOS.three * 100}% = 3★, ≥${MATH_STAR_RATIOS.two * 100}% = 2★).` : 'By time (faster = more stars).'}</span>
             </li>
           </ul>
           <button
@@ -290,9 +295,11 @@ export default function MainModal({
                 <>
                   <p className="font-medium text-amber-200/90">Math Tour Rules</p>
                   <ul className="list-disc list-inside space-y-1 text-gray-400">
-                    <li>Knight moves in L-shape; land on tiles to collect score (2–5 per tile)</li>
+                    <li>Knight moves in L-shape; pawn +1, knight +3, bishop −3, rook +5, queen ×2</li>
                     <li>Fire tile multiplies your score by 3 when you land on it; leave within 3s</li>
-                    <li>Reach the target score to capture the King; stars depend on score ratio</li>
+                    <li>Reach the target score for 1 star; score {MATH_STAR_RATIOS.two * 100}% for 2 stars or {MATH_STAR_RATIOS.three * 100}% for 3 stars</li>
+                    <li>Collect more points before capturing the King to earn more stars; live star targets are shown above the board</li>
+                    <li>Timers pause during help, settings, purchases and hint requests</li>
                   </ul>
                 </>
               ) : (
@@ -302,6 +309,7 @@ export default function MainModal({
                     <li>Knight moves in L-shape; clear every reachable tile</li>
                     <li>Leave fire tiles within 3 seconds or you lose</li>
                     <li>Capture the King after clearing the board; stars depend on time</li>
+                    <li>Each fire tile gives a fresh 3 seconds; timers pause in dialogs</li>
                   </ul>
                 </>
               )}

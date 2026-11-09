@@ -1,4 +1,5 @@
 export type GameMode = 'classic' | 'math_tour';
+export type Position = { r: number; c: number };
 
 /** Math Tour 格子上的棋子，用于显示与分数对应 */
 export type MathPiece = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen';
@@ -28,6 +29,7 @@ export interface TileData {
 }
 
 export interface LevelConfig {
+  solution?: Position[];
   level: number;
   grid: TileData[][];
   knightPos: { r: number; c: number };
@@ -51,6 +53,7 @@ export interface HistoryEntry {
 }
 
 export interface GameState {
+  solution?: Position[];
   level: number;
   maxUnlockedLevel: number;
   levelStars: Record<number, number>;

@@ -67,3 +67,32 @@ model InventoryDelivery {
   @@id([portal_user_id, purchase_id])
   @@map("inventory_deliveries")
 }
+
+model GameAttempt {
+  id             String    @id @default(uuid()) @db.Uuid
+  portal_user_id Int
+  game_mode      String
+  level          Int
+  level_version  Int
+  started_at     DateTime  @default(now())
+  resumed_at     DateTime?
+  active_ms      Int       @default(0)
+  finished_at    DateTime?
+  stars          Int?
+  moves_count    Int?
+  hints          AttemptHint[]
+
+  @@index([portal_user_id])
+  @@map("game_attempts")
+}
+
+model AttemptHint {
+  attempt_id   String @db.Uuid
+  position_key String
+  move_r       Int
+  move_c       Int
+  attempt      GameAttempt @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
+
+  @@id([attempt_id, position_key])
+  @@map("attempt_hints")
+}

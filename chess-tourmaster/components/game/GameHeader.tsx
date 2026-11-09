@@ -2,6 +2,7 @@
 
 import { MAX_LEVELS } from '@/lib/game/levelCatalog';
 import type { HistoryEntry } from '@/lib/game/types';
+import MathStarProgress from './MathStarProgress';
 
 function formatPathExpression(history: HistoryEntry[]): string {
   return history
@@ -20,7 +21,6 @@ type Props = {
   maxUnlockedLevel: number;
   levelStars: Record<number, number>;
   username?: string;
-  tilesLeft: number;
   onSelectLevel: (level: number) => void;
   onRestart: () => void;
   onUndo: () => void;
@@ -46,7 +46,6 @@ export default function GameHeader({
   maxUnlockedLevel,
   levelStars,
   username,
-  tilesLeft,
   onSelectLevel,
   onRestart,
   onUndo,
@@ -183,7 +182,6 @@ export function TilesAndScoreBar({
   history?: HistoryEntry[];
 }) {
   const isMathTour = gameMode === 'math_tour';
-  const hasEnoughScore = isMathTour && requiredScore != null && currentScore != null && currentScore >= requiredScore;
   const pathExpression = isMathTour ? formatPathExpression(history) : '';
   return (
     <div className="z-10 w-full max-w-[95vw] lg:max-w-5xl px-4 lg:px-6 mb-1 flex flex-col items-center gap-1">
@@ -199,13 +197,7 @@ export function TilesAndScoreBar({
           </span>
         </div>
         {isMathTour && requiredScore != null && (
-          <div
-            className={`font-bold text-sm md:text-lg lg:text-xl flex items-center bg-slate-900/50 px-3 lg:px-4 py-1 lg:py-1.5 rounded-full border border-slate-700 ${hasEnoughScore ? 'text-lime-400' : 'text-amber-300'}`}
-          >
-            Score: <span className="ml-1 text-white">{currentScore ?? 0}</span>
-            <span className="mx-1 text-slate-500">/</span>
-            <span className="text-white">{requiredScore}</span>
-          </div>
+          <MathStarProgress score={currentScore ?? 0} requiredScore={requiredScore} />
         )}
       </div>
       {isMathTour && (

@@ -1,6 +1,6 @@
 import type { GameState, LevelConfig, HistoryEntry, GameMode, ThemeName } from './types';
 import { THEME_CLASSES } from './types';
-import { getValidMoves } from './levelGenerator';
+import { getValidMoves } from './moves';
 
 export type GameAction =
   | { type: 'SET_MODE'; payload: GameMode }
@@ -45,7 +45,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'SET_MODE':
       return {
-        ...state,
+        ...initialGameState,
+        theme: state.theme,
         gameMode: action.payload,
         level: 1,
         maxUnlockedLevel: 1,
@@ -61,6 +62,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         level: config.level,
         grid,
+        solution: config.solution?.map(p => ({ ...p })),
         knightPos: { ...config.knightPos },
         kingPos: { ...config.kingPos },
         gridSizeVal: config.gridSizeVal,
@@ -78,6 +80,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'MOVE': {
       const { r, c } = action.payload;
+      if (!isValidMove(state, r, c)) return state;
       const curr = state.knightPos;
       const dr = Math.abs(curr.r - r);
       const dc = Math.abs(curr.c - c);
@@ -150,7 +153,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'UNDO': {
-      if (state.history.length === 0) return state;
+      if (!state.isPlaying || state.history.length === 0) return state;
       const lastEntry = state.history[state.history.length - 1];
       const isKingCaptureMove = lastEntry.prevPos.r === state.kingPos.r && lastEntry.prevPos.c === state.kingPos.c;
       const newHistory = state.history.slice(0, -1);
@@ -247,6 +250,7 @@ export function canMoveToKing(state: GameState): boolean {
 }
 
 export function isValidMove(state: GameState, r: number, c: number): boolean {
+  if (!state.isPlaying || !Number.isInteger(r) || !Number.isInteger(c)) return false;
   const curr = state.knightPos;
   const dr = Math.abs(curr.r - r);
   const dc = Math.abs(curr.c - c);

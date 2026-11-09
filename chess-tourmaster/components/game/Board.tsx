@@ -9,9 +9,10 @@ type Props = {
   onMove: (r: number, c: number) => void;
   shake: boolean;
   hintTarget: { r: number; c: number } | null;
+  locked?: boolean;
 };
 
-export default function Board({ state, onMove, shake, hintTarget }: Props) {
+export default function Board({ state, onMove, shake, hintTarget, locked = false }: Props) {
   const size = state.gridSizeVal;
 
   if (!state.grid.length) {
@@ -25,6 +26,7 @@ export default function Board({ state, onMove, shake, hintTarget }: Props) {
   return (
     <div
       id="game-board"
+      inert={locked || undefined}
       className={`board-shell z-10 relative bg-slate-800/60 p-2 md:p-3 lg:p-4 rounded-xl shadow-2xl border-4 border-slate-600 backdrop-blur-md w-full max-w-[95vw] md:max-w-3xl lg:max-w-4xl aspect-square flex items-center justify-center mx-auto grid gap-1 md:gap-1.5 lg:gap-2 ${shake ? 'shake' : ''}`}
       style={{ gridTemplateColumns: `repeat(${size}, 1fr)` }}
     >
@@ -34,6 +36,7 @@ export default function Board({ state, onMove, shake, hintTarget }: Props) {
             state.knightPos.r === r && state.knightPos.c === c;
           const valid =
             state.isPlaying &&
+            !locked &&
             isValidMove(state, r, c);
           const isHintTarget =
             hintTarget != null &&
