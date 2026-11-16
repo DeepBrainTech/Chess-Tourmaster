@@ -309,7 +309,6 @@ export default function MainModal({
                     <li>Knight moves in L-shape; clear every reachable tile</li>
                     <li>Leave fire tiles within 3 seconds or you lose</li>
                     <li>Capture the King after clearing the board; stars depend on time</li>
-                    <li>Each fire tile gives a fresh 3 seconds; timers pause in dialogs</li>
                   </ul>
                 </>
               )}
