@@ -12,9 +12,11 @@ export function usePortalSession() {
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     let cancelled = false;
-    launch ??= captureLaunchContext();
-    setContext(launch);
-    void portalSession.bootstrap(launch.token, launch.portalLocale)
+    void Promise.resolve().then(() => {
+      launch ??= captureLaunchContext();
+      if (!cancelled) setContext(launch);
+      return portalSession.bootstrap(launch.token, launch.portalLocale);
+    })
       .then(value => { if (!cancelled) setUser(value); })
       .catch(() => { if (!cancelled) setUser(null); })
       .finally(() => { if (!cancelled) setLoading(false); });

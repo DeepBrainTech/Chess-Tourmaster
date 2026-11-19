@@ -1,6 +1,6 @@
 'use client';
 
-import { useReducer, useEffect, useRef, useCallback, useState } from 'react';
+import { useReducer, useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react';
 import type { GameMode, ModalType } from '@/lib/game/types';
 import {
   gameReducer,
@@ -78,7 +78,9 @@ const UNDO_ITEM_ID = 'chess_tourmaster_undo';
 export default function GamePage({ accountId, username, initialPortalAssets, portalLocale }: Props) {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
   const activeMode = useRef(state.gameMode);
-  activeMode.current = state.gameMode;
+  useLayoutEffect(() => {
+    activeMode.current = state.gameMode;
+  }, [state.gameMode]);
   const [modalType, setModalType] = useState<ModalType>('mode');
   const [homeOverlay, setHomeOverlay] = useState(false);
   const [mapHelpMode, setMapHelpMode] = useState<GameMode>();
@@ -256,7 +258,7 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
 
   useEffect(() => {
     if (modalType !== 'mode') return;
-    void loadProgress(state.gameMode === 'classic' ? 'math_tour' : 'classic', false);
+    void Promise.resolve().then(() => loadProgress(state.gameMode === 'classic' ? 'math_tour' : 'classic', false));
   }, [loadProgress, modalType, state.gameMode]);
 
   useEffect(() => {
@@ -416,7 +418,6 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
         const config = useSaved && state.savedGridConfig?.level === level
           ? state.savedGridConfig : getFixedLevelConfig(level, mode);
         if (mode !== state.gameMode) {
-          activeMode.current = mode;
           dispatch({ type: 'SET_MODE', payload: mode });
         }
         wonByCaptureRef.current = false;
@@ -498,7 +499,6 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
 
   const setMode = useCallback((mode: 'classic' | 'math_tour') => {
     if (operationBusy.current) return;
-    activeMode.current = mode;
     dispatch({ type: 'SET_MODE', payload: mode });
     setHintTarget(null);
     setModalType('welcome');

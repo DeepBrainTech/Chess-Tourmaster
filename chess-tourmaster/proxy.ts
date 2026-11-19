@@ -6,7 +6,7 @@ import { getCorsHeaders } from '@/lib/http';
  * 统一处理 /api/* 的 CORS 预检（OPTIONS），确保跨域前端能通过预检。
  * GET/POST 的 CORS 头由各 API 的 jsonResponse 添加。
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   if (request.method !== 'OPTIONS') {
     return NextResponse.next();
   }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { PortalInventoryClient } from '@/lib/portal-inventory';
 import type { InventoryDelivery } from '@/lib/portal-client';
 import { gameFetch } from '@/lib/portal-session';
@@ -10,8 +10,10 @@ export type InventoryCounts = { hint_count: number; undo_count: number };
 export function useGameInventory(base: string, userId: number, onCounts: (counts: InventoryCounts) => void) {
   const currentAccount = useRef(userId);
   const countsCallback = useRef(onCounts);
-  currentAccount.current = userId;
-  countsCallback.current = onCounts;
+  useLayoutEffect(() => {
+    currentAccount.current = userId;
+    countsCallback.current = onCounts;
+  }, [userId, onCounts]);
   const client = useMemo(() => new PortalInventoryClient(base, 'chess-tourmaster', () => userId), [base, userId]);
   const busy = useRef(new Set<string>());
   const recovering = useRef<Promise<void> | null>(null);

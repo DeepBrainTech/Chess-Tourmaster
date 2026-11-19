@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { GameClock } from '@/lib/game/clock';
 
 export function useGameClock(startedAt: number, running: boolean, position: string, fire: boolean,
   onTick: (seconds: number, fireRemainingMs: number) => void) {
   const clock = useRef(new GameClock());
   const callback = useRef(onTick);
-  callback.current = onTick;
+  useLayoutEffect(() => { callback.current = onTick; }, [onTick]);
   useEffect(() => { clock.current = new GameClock(); }, [startedAt]);
   useEffect(() => {
     const update = () => {
