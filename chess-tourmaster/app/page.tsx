@@ -1,6 +1,8 @@
 'use client';
 
 import GamePage from '@/components/game/GamePage';
+import ModesHome from '@/components/game/ModesHome';
+import { getPortalUrl } from '@/lib/apiBase';
 import { usePortalSession } from '@/hooks/usePortalSession';
 import { getPortalLoginUrl } from '@/lib/portal-session';
 
@@ -19,19 +21,16 @@ export default function Home() {
   }
 
   if (!user) {
+    const login = () => window.location.assign(getPortalLoginUrl(context?.portalLocale));
     return (
-      <div className="flex items-center justify-center min-h-[100dvh] bg-slate-950 text-white px-6">
-        <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900/80 p-8 text-center shadow-2xl">
-          <h1 className="text-2xl font-bold mb-3">Login Required</h1>
-          <p className="text-slate-300 mb-6">Please login to start playing Knightours Chess.</p>
-          <a
-            href={getPortalLoginUrl(context?.portalLocale)}
-            className="inline-flex items-center justify-center w-full rounded-xl bg-cyan-600 hover:bg-cyan-500 px-4 py-3 font-semibold transition"
-          >
-            Login
-          </a>
-        </div>
-      </div>
+      <ModesHome
+        portalUrl={getPortalUrl('braingames', context?.portalLocale)}
+        onLogin={login}
+        onPlay={login}
+        onLeaderboard={login}
+        onHelp={login}
+        onSettings={login}
+      />
     );
   }
 

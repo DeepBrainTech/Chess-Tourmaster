@@ -12,28 +12,12 @@ type WinData = {
   baseScore?: number;
 };
 
-type LeaderboardEntry = {
-  portal_user_id: number;
-  rank: number;
-  username: string;
-  total_levels: number;
-};
-type LeaderboardMode = 'classic' | 'math_tour';
-
 type Props = {
   busy?: boolean;
   type: ModalType;
   gameMode: 'classic' | 'math_tour';
   startLevel: number;
   winData: WinData | null;
-  accountId?: number;
-  leaderboard: LeaderboardEntry[];
-  leaderboardLoading: boolean;
-  leaderboardError?: string | null;
-  leaderboardMode: LeaderboardMode;
-  onSetMode: (mode: 'classic' | 'math_tour') => void;
-  onOpenLeaderboard: () => void;
-  onChangeLeaderboardMode: (mode: LeaderboardMode) => void;
   onStartLevel: () => void;
   onNextLevel: () => void;
   onRetry: () => void;
@@ -57,14 +41,6 @@ export default function MainModal({
   gameMode,
   startLevel,
   winData,
-  accountId,
-  leaderboard,
-  leaderboardLoading,
-  leaderboardError,
-  leaderboardMode,
-  onSetMode,
-  onOpenLeaderboard,
-  onChangeLeaderboardMode,
   onStartLevel,
   onNextLevel,
   onRetry,
@@ -74,7 +50,7 @@ export default function MainModal({
   if (type === 'none') return null;
 
   const isMathTour = gameMode === 'math_tour';
-  const isOverlayModal = type === 'settings' || type === 'help' || type === 'leaderboard';
+  const isOverlayModal = type === 'settings' || type === 'help';
 
   return (
     <div
@@ -158,129 +134,8 @@ export default function MainModal({
         </div>
       )}
 
-      {type === 'leaderboard' && onCloseOverlay && (
-        <div
-          className="w-full max-w-2xl m-4 rounded-2xl border-2 border-amber-400/80 bg-gradient-to-br from-rose-900 via-red-800 to-amber-600 p-4 md:p-6 shadow-2xl"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-2xl md:text-3xl font-bold text-white fantasy-font">
-              <i className="fas fa-trophy text-amber-300 mr-3" />
-              Leaderboard
-            </h3>
-            <button
-              type="button"
-              onClick={onCloseOverlay}
-              className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white"
-              aria-label="Close leaderboard"
-            >
-              <i className="fas fa-times" />
-            </button>
-          </div>
-          <p className="text-sm text-amber-100/90 mb-3">Total Levels Unlocked</p>
-          <div className="flex items-center gap-2 mb-3">
-            <button
-              type="button"
-              onClick={() => onChangeLeaderboardMode('classic')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-semibold border ${
-                leaderboardMode === 'classic'
-                  ? 'bg-white/20 border-amber-300 text-white'
-                  : 'bg-black/20 border-white/20 text-white/80 hover:bg-black/30'
-              }`}
-            >
-              Classic Tour
-            </button>
-            <button
-              type="button"
-              onClick={() => onChangeLeaderboardMode('math_tour')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-semibold border ${
-                leaderboardMode === 'math_tour'
-                  ? 'bg-white/20 border-amber-300 text-white'
-                  : 'bg-black/20 border-white/20 text-white/80 hover:bg-black/30'
-              }`}
-            >
-              Math Tour
-            </button>
-          </div>
-          <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-            {leaderboardLoading ? (
-              <div className="rounded-xl bg-black/20 border border-white/15 px-4 py-3 text-white/80 text-sm">
-                Loading...
-              </div>
-            ) : leaderboardError ? (
-              <div role="alert" className="rounded-xl bg-black/20 border-red-400 px-4 py-3 text-red-200 text-sm">
-                {leaderboardError}
-              </div>
-            ) : leaderboard.length === 0 ? (
-              <div className="rounded-xl bg-black/20 border border-white/15 px-4 py-3 text-white/80 text-sm">
-                No records yet
-              </div>
-            ) : (
-              leaderboard.map((entry) => {
-                const isCurrentUser = accountId != null && entry.portal_user_id === accountId;
-                return (
-                  <div
-                    key={entry.portal_user_id}
-                    className={`rounded-xl px-4 py-3 border ${
-                      isCurrentUser
-                        ? 'bg-white/15 border-amber-300 text-white'
-                        : 'bg-black/20 border-white/15 text-white/95'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold">
-                        {entry.rank}. {entry.username}
-                        {isCurrentUser ? ' (You)' : ''}
-                      </span>
-                      <span className="font-bold text-amber-200">Level {entry.total_levels}</span>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      )}
-
       {!isOverlayModal && (
       <div className="bg-gray-800 border-2 border-rose-600 p-6 md:p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center m-4 relative">
-        {type === 'mode' && (
-          <>
-            <div className="mb-4 text-6xl flex justify-center gap-4">
-              <i className="fas fa-chess-knight text-cyan-500" />
-              <i className="fas fa-chess-king text-rose-500" />
-            </div>
-            <h2 className="text-3xl font-bold text-white mb-2 fantasy-font">
-              Knightours Chess
-            </h2>
-            <p className="text-sm text-gray-400 mb-4">Select your game mode:</p>
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => onSetMode('classic')}
-                className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl transition"
-              >
-                Classic Tour
-              </button>
-              <button
-                type="button"
-                onClick={() => onSetMode('math_tour')}
-                className="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 rounded-xl transition"
-              >
-                Math Tour
-              </button>
-              <button
-                type="button"
-                onClick={onOpenLeaderboard}
-                className="w-full bg-violet-600 hover:bg-violet-500 text-white font-bold py-3 rounded-xl transition"
-              >
-                <i className="fas fa-trophy mr-2 text-amber-300" />
-                Leaderboard
-              </button>
-            </div>
-          </>
-        )}
-
         {type === 'welcome' && (
           <>
             <div className="mb-4 text-6xl flex justify-center gap-4">

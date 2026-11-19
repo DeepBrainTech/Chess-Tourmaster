@@ -15,6 +15,7 @@ const { randomUUID } = require('node:crypto');
 function setup(storage = new Map()) {
   let userId = 42;
   let portalUserId = 42;
+  let assets = { coins: 0, diamonds: 2, flowers: 3 };
   let loseResponse = false;
   let failServer = false;
   let posts = 0;
@@ -30,6 +31,10 @@ function setup(storage = new Map()) {
       assert.equal(options.credentials, 'include');
       assert.equal(options.cache, 'no-store');
       const parsed = new URL(url);
+      if (parsed.pathname === '/api/user/shop/chess-tourmaster/quote') {
+        assert.equal(options.method, undefined);
+        return { ok: true, json: async () => ({ success: true, data: { user_id: portalUserId, assets } }) };
+      }
       if (parsed.pathname.endsWith('/session')) {
         return { ok: true, json: async () => ({ success: true, data: { user: { id: portalUserId } } }) };
       }
@@ -54,8 +59,20 @@ function setup(storage = new Map()) {
   const client = new context.window.PortalInventoryClient('https://portal.test', gameKey, () => userId);
   return { client, requests, storage, get posts() { return posts; }, get charges() { return charges; },
     lose: () => { loseResponse = true; }, fail: value => { failServer = value; },
-    switchGameUser: value => { userId = value; }, switchPortalUser: value => { portalUserId = value; } };
+    switchGameUser: value => { userId = value; }, switchPortalUser: value => { portalUserId = value; },
+    setAssets: value => { assets = value; } };
 }
+
+test('balance reads preserve zero and reject mismatched accounts or incomplete balances', async () => {
+  const f = setup();
+  assert.equal((await f.client.accountAssets()).coins, 0);
+  f.switchPortalUser(43);
+  await assert.rejects(f.client.accountAssets(), /portal_account_mismatch/);
+  f.switchPortalUser(42);
+  f.setAssets({ diamonds: 2, flowers: 3 });
+  await assert.rejects(f.client.accountAssets(), /invalid_portal_assets/);
+  assert.equal(f.posts, 0);
+});
 
 test('redemption retry reuses UUID and a new action generates a new UUID', async () => {
   const f = setup();

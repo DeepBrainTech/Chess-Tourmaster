@@ -44,6 +44,19 @@ export class PortalInventoryClient extends PortalGameClient {
     }
   }
 
+  async accountAssets(signal?: AbortSignal) {
+    const expected = this.accountId();
+    const quote = await this.inventoryQuote(signal);
+    if (!expected || quote?.user_id !== expected || this.accountId() !== expected) {
+      throw new PortalApiError(401, 'portal_account_mismatch');
+    }
+    const assets = quote.assets;
+    if (!assets || ![assets.coins, assets.diamonds, assets.flowers].every(value => Number.isFinite(value) && value >= 0)) {
+      throw new PortalApiError(502, 'invalid_portal_assets');
+    }
+    return assets;
+  }
+
   private async mutate<T>(operation: string, send: (id: string) => Promise<T>,
     keep = false): Promise<T> {
     const key = this.key(operation);

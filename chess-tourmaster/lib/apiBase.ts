@@ -30,7 +30,7 @@ function portalDefaultBase(port: number, production: string): string {
   return production;
 }
 
-export function getPortalUrl(page: 'login' | 'braingames', locale = 'en'): string {
+export function getPortalUrl(page: 'login' | 'braingames' | 'shop', locale = 'en'): string {
   const language = /^(zn|zh)(?:[-_]|$)/i.test(locale) ? 'zh' : 'en';
   return `${getPortalBase()}/${language}/${page}`;
 }

@@ -4,7 +4,6 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'Knightours Chess',
   description: 'A challenging chess knight tour puzzle game',
-  icons: { icon: '/icon.png' },
 }
 
 export const viewport: Viewport = {

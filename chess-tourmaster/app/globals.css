@@ -20,7 +20,7 @@ h2,
 }
 
 /* Game board & tiles */
-#game-board {
+#game-board:not([data-mode='classic']) {
   background-image: repeating-linear-gradient(45deg, #1e293b 25%, transparent 25%, transparent 75%, #1e293b 75%, #1e293b),
     repeating-linear-gradient(45deg, #1e293b 25%, #0f172a 25%, #0f172a 75%, #1e293b 75%, #1e293b);
   background-position: 0 0, 10px 10px;

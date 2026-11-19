@@ -74,6 +74,10 @@ export class PortalGameClient {
     return this.request("/api/user/assets");
   }
 
+  inventoryQuote(signal?: AbortSignal): Promise<{ user_id: number; assets: Assets }> {
+    return this.request("/api/user/shop/" + encodeURIComponent(this.gameKey) + "/quote", { signal });
+  }
+
   catalog(): Promise<{ items: Record<string, { name: string; games: string[]; cost: Assets }>; game_mode: string }> {
     const query = new URLSearchParams({ game_mode: this.gameKey });
     return this.request("/api/games/shop/catalog?" + query);
