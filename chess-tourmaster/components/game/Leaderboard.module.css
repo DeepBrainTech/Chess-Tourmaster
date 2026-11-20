@@ -83,7 +83,14 @@
 }
 
 .hexagon img { width: calc(47 * var(--u)); height: calc(57 * var(--u)); }
-.hexagon span { position: absolute; top: 22%; font-size: calc(22 * var(--u)); }
+.hexagon span {
+  position: absolute;
+  /* Center over the hexagon face, above the SVG's bottom shadow. */
+  margin-block-end: calc(3 * var(--u));
+  font-size: calc(22 * var(--u));
+  line-height: 1;
+  text-box: trim-both cap alphabetic;
+}
 
 .results { height: calc(644 * var(--u)); }
 

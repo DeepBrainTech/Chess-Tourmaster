@@ -178,13 +178,22 @@
 }
 
 .badge { position: absolute; left: calc(-12 * var(--u)); display: grid; place-items: center; }
-.badge span { position: absolute; top: 22%; font-size: calc(22 * var(--u)); }
+.badge span {
+  position: absolute;
+  top: calc(50% - 14 * var(--u));
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: calc(22 * var(--u));
+  line-height: normal;
+  text-shadow: calc(1.5 * var(--u)) calc(3 * var(--u)) var(--outline);
+}
 
 .play {
   min-width: calc(268 * var(--u));
   min-height: calc(88 * var(--u));
   background: #5bd63a;
   font-size: calc(48 * var(--u));
+  text-shadow: calc(3 * var(--u)) calc(6 * var(--u)) var(--outline);
 }
 
 .board { position: relative; overflow: hidden; aspect-ratio: 255.24 / 259.75; border-radius: calc(16 * var(--u)); translate: calc(9 * var(--u)); }
