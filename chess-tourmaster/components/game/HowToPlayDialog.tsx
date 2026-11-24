@@ -92,7 +92,8 @@ export default function HowToPlayDialog({ initialMode = 'classic', gameMode, onC
       ) : (
         <div className={styles.tabs} role="tablist" aria-label="Game mode" onKeyDown={moveTabFocus}>
           {tours.map(({ mode: tabMode, label, tab: [name, width, height] }) => <button key={tabMode} type="button"
-            id={`${id}-${tabMode}`} role="tab" aria-selected={mode === tabMode} tabIndex={mode === tabMode ? 0 : -1}
+            id={`${id}-${tabMode}`} role="tab" aria-controls={`${id}-${tabMode}-panel`}
+            aria-selected={mode === tabMode} tabIndex={mode === tabMode ? 0 : -1}
             onClick={() => setMode(tabMode)}>
             <span className={styles.tabIcon}><GameIcon directory="level-map" name={name} width={width} height={height} /></span>
             <span>{label}</span>
@@ -100,8 +101,9 @@ export default function HowToPlayDialog({ initialMode = 'classic', gameMode, onC
         </div>
       )}
 
-      {visibleTours.map(tour => <div key={tour.mode} role={gameMode ? undefined : 'tabpanel'}
-        aria-labelledby={gameMode ? undefined : `${id}-${tour.mode}`} hidden={mode !== tour.mode}>
+      {visibleTours.map(tour => <div key={tour.mode} className={styles.rulePanel} data-mode={tour.mode}
+        role={gameMode ? undefined : 'tabpanel'} id={gameMode ? undefined : `${id}-${tour.mode}-panel`}
+        aria-labelledby={gameMode ? undefined : `${id}-${tour.mode}`} inert={mode !== tour.mode}>
         <div className={styles.rules}>
           <BadgeHeading className={styles.badge}>
             <span className={styles.badgeIcon}><RulesIcon artwork={tour.badge} /></span>{tour.label}

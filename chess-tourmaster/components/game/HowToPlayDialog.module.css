@@ -1,6 +1,7 @@
 .dialog.dialog {
   --u: clamp(.5px, min(calc((100dvw - 24px) / 1133), calc((100dvh - 24px) / 1030)), 1px);
   --step-column: calc(102.55 * var(--u));
+  --step-gap: calc(18.4 * var(--u));
   --inset: #131a3d;
   --gloss: #ffffff73;
   --shade: #0b10304f;
@@ -12,17 +13,29 @@
 
 .dialog .panel {
   --mode-color: #2fa8ff;
-  --section-gap: calc(28 * var(--u));
-  display: block;
+  grid-template-columns: minmax(0, 1fr);
   padding: calc(60 * var(--u)) calc(80 * var(--u)) calc(40 * var(--u));
   text-align: start;
 }
 
-.dialog .panel[data-mode='math_tour'] {
+.dialog .panel[data-mode='math_tour'], .rulePanel[data-mode='math_tour'] {
   --mode-color: #a45cff;
-  --section-gap: calc(32 * var(--u));
-  padding-block-start: calc(80 * var(--u));
 }
+
+/* Both tab panels size the same grid row so switching tabs keeps the dialog in place. */
+.rulePanel {
+  --mode-color: #2fa8ff;
+  --section-gap: calc(28 * var(--u));
+  grid-area: 1 / 1;
+  align-self: start;
+}
+
+.rulePanel[data-mode='math_tour']:not([role='tabpanel']) {
+  --section-gap: calc(32 * var(--u));
+  padding-block-start: calc(20 * var(--u));
+}
+
+.rulePanel[inert] { visibility: hidden; }
 
 .dialog :is(h1, h2) { font-family: inherit; }
 
@@ -36,6 +49,8 @@
 }
 
 .tabs {
+  --tab-gap: calc(24 * var(--u));
+  --tab-padding: calc(8 * var(--u));
   position: absolute;
   z-index: 1;
   inset-block-start: calc(-52 * var(--u));
@@ -43,15 +58,16 @@
   translate: -50% 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: calc(24 * var(--u));
+  gap: var(--tab-gap);
   inline-size: min(calc(550 * var(--u)), 100%);
-  padding: calc(8 * var(--u));
+  padding: var(--tab-padding);
   border: calc(5 * var(--u)) solid var(--outline);
   border-radius: calc(20 * var(--u));
   background: var(--inset);
 }
 
 .tabs button {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -64,10 +80,19 @@
   text-shadow: calc(1.57 * var(--u)) calc(3.14 * var(--u)) black;
 }
 
-.tabs button[aria-selected='true'] {
+.tabs::before {
+  content: '';
+  position: absolute;
+  inset-block: var(--tab-padding);
+  inset-inline-start: var(--tab-padding);
+  inline-size: calc((100% - 2 * var(--tab-padding) - var(--tab-gap)) / 2);
+  border-radius: calc(20 * var(--u));
+  pointer-events: none;
   background: #a45cff;
   box-shadow: inset 0 calc(-4 * var(--u)) var(--shade), inset 0 calc(3 * var(--u)) var(--gloss);
 }
+
+.panel[data-mode='math_tour'] .tabs::before { translate: calc(100% + var(--tab-gap)) 0; }
 
 .tabs button:focus-visible { outline: 2px solid white; outline-offset: 2px; }
 
@@ -150,7 +175,7 @@
 .steps {
   position: relative;
   display: grid;
-  gap: calc(18.4 * var(--u));
+  gap: var(--step-gap);
 }
 
 .steps li {
@@ -248,7 +273,48 @@
   box-shadow: inset 0 calc(-12 * var(--u)) var(--shade), inset 0 calc(8 * var(--u)) var(--gloss);
 }
 
-.panel[data-mode='math_tour'] .warningBody { inline-size: calc(100% + 33 * var(--u)); }
+.rulePanel[data-mode='math_tour']:not([role='tabpanel']) .warningBody { inline-size: calc(100% + 33 * var(--u)); }
+
+.rulePanel[role='tabpanel'] .badge { inline-size: min(100%, max(8rem, calc(228 * var(--u)))); }
+.rulePanel[role='tabpanel'] .warning { inline-size: min(100%, calc(546.38 * var(--u))); }
+
+@supports (grid-template-rows: subgrid) {
+  .dialog .panel:has(> [role='tabpanel']) {
+    grid-template-rows: repeat(7, auto);
+    row-gap: var(--step-gap);
+  }
+
+  /* Both panels share the badge, four step, warning, and button rows. */
+  .rulePanel[role='tabpanel'] {
+    display: grid;
+    grid-row: 1 / -1;
+    align-self: stretch;
+  }
+
+  .rulePanel[role='tabpanel'],
+  .rulePanel[role='tabpanel'] :is(.rules, .stepList, .steps, .footer) {
+    grid-template-rows: subgrid;
+    row-gap: inherit;
+  }
+
+  .rulePanel[role='tabpanel'] :is(.rules, .steps) { grid-row: 1 / -1; }
+
+  .rulePanel[role='tabpanel'] .stepList {
+    display: grid;
+    grid-row: 2 / span 4;
+    margin-block-start: calc(var(--section-gap) - var(--step-gap));
+  }
+
+  .rulePanel[role='tabpanel'] .step { align-self: stretch; }
+
+  .rulePanel[role='tabpanel'] .footer {
+    grid-row: 6 / -1;
+    row-gap: calc(14 * var(--u));
+    padding-block-start: calc(var(--section-gap) + 7 * var(--u) - var(--step-gap));
+  }
+
+  .rulePanel[role='tabpanel'] .warning { display: grid; }
+}
 
 .fireIcon {
   display: grid;
@@ -301,13 +367,38 @@
   .dialog .panel { padding-inline: 10px; }
   .dialog .panel[data-mode] { padding-block-start: 38px; }
   .dialog .heading { padding-inline: calc(24 * var(--u)); font-size: clamp(1rem, 6vw, calc(56 * var(--u))); }
-  .tabs { gap: calc(12 * var(--u)); inline-size: min(275px, calc(100% - 50px)); inset-inline-start: 5px; translate: none; }
+  .tabs { --tab-gap: calc(12 * var(--u)); inline-size: min(275px, calc(100% - 50px)); inset-inline-start: 5px; translate: none; }
   .tabs button { gap: 0; }
   .tabIcon { inline-size: calc(47 * var(--u)); }
   .dialog .close { inset-inline-end: -3px; }
   .steps li { gap: 6px; }
   .step { gap: 8px; padding-inline: 6px; }
-  .panel[data-mode='math_tour'] .warningBody { inline-size: 100%; }
+  .rulePanel[data-mode='math_tour']:not([role='tabpanel']) { padding-block-start: 0; }
+  .rulePanel[data-mode='math_tour']:not([role='tabpanel']) .warningBody { inline-size: 100%; }
+  .rulePanel[role='tabpanel'] .warning { inline-size: min(100%, calc(513.38 * var(--u))); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .panel { --rules-tab-transition: 300ms ease-out; }
+  .tabs::before { transition: translate var(--rules-tab-transition); }
+
+  .rulePanel[inert] {
+    --rules-content-opacity: 0;
+    z-index: 1;
+  }
+
+  .rulePanel[role='tabpanel'] :is(
+    .badge,
+    .steps li:not(:first-child) .step > div,
+    .steps li:is(:nth-child(2), :nth-child(3)) .stepIcon,
+    .warningBody h2,
+    .warningBody p:last-child
+  ) {
+    /* Keep the outgoing text and icons visible as they fade within the shared rows. */
+    visibility: visible;
+    opacity: var(--rules-content-opacity, 1);
+    transition: opacity var(--rules-tab-transition);
+  }
 }
 
 @media (forced-colors: active) {
