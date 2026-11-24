@@ -21,7 +21,9 @@ const logoLayers = [
 ] as const;
 
 export function GameIcon({ name, width, height, directory = 'modes' }: { name: string; width: number; height: number; directory?: string }) {
-  return <Image src={`/${directory}/${name}.svg`} alt="" width={width} height={height} unoptimized
+  const isCoin = name === 'coin' || name === 'old-coin';
+  const src = isCoin ? '/portal/coin.svg' : `/${directory}/${name}.svg`;
+  return <Image src={src} alt="" width={width} height={height} unoptimized
     style={{ width: `calc(${width} * var(--u))`, height: `calc(${height} * var(--u))` }} />;
 }
 
