@@ -156,6 +156,8 @@
   text-align: center;
 }
 
+.listEnd { min-height: 1px; }
+
 .state button {
   padding-inline: 16px;
   min-height: 44px;

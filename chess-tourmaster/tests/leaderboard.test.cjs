@@ -6,7 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
-test('leaderboard includes legacy progress, merges renamed accounts and returns the viewer beyond the top ten', {
+test('leaderboard ranks distinct clears, keeps global ranks across pages and returns the viewer', {
   skip: process.env.TOURMASTER_LEADERBOARD_DB_TEST !== '1',
 }, async () => {
   const { PrismaClient } = require('@prisma/client');
@@ -34,42 +34,51 @@ test('leaderboard includes legacy progress, merges renamed accounts and returns 
     await prisma.$executeRawUnsafe(`INSERT INTO level_records (portal_user_id, username, game_mode, level)
       VALUES (42, 'first-name', 'classic', 1), (42, 'second-name', 'classic', 2),
         (45, 'old-name', 'classic', 1), (45, 'new-name', 'classic', 1),
-        (45, 'new-name', 'classic', 2), (45, 'new-name', 'math_tour', 1)`);
+        (45, 'new-name', 'classic', 2), (45, 'new-name', 'math_tour', 1),
+        (42, 'current-name', 'math_tour', 1), (42, 'current-name', 'math_tour', 2),
+        (42, 'current-name', 'classic', 101), (0, 'DevUser', 'classic', 1)`);
+    await prisma.$executeRawUnsafe(`UPDATE level_records SET completed_at = '2025-01-01' WHERE portal_user_id = 42`);
+    await prisma.$executeRawUnsafe(`INSERT INTO level_records (portal_user_id, username, game_mode, level)
+      VALUES (42, 'current-name', 'classic', 1)`);
     await prisma.$executeRawUnsafe(`INSERT INTO user_hints (portal_user_id, username)
       VALUES (42, 'current-name'), (45, 'current-name')`);
-    await prisma.$executeRawUnsafe(`INSERT INTO mode_progress (portal_user_id, username, game_mode, max_unlocked_level)
-      SELECT n, 'leader-' || n, 'classic', 30 + n FROM generate_series(1, 11) n`);
+    await prisma.$executeRawUnsafe(`INSERT INTO level_records (portal_user_id, username, game_mode, level)
+      SELECT n, 'leader-' || n, 'classic', level FROM generate_series(1, 11) n
+      CROSS JOIN LATERAL generate_series(1, 20 + n) level`);
 
     const code = ts.transpileModule(fs.readFileSync(path.join(__dirname, '../lib/leaderboard.ts'), 'utf8'), {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
     }).outputText;
     const exports = {};
     vm.runInNewContext(code, { exports, require: name => {
+      if (name === './game/rules') return { MAX_LEVELS: 100 };
       assert.equal(name, '@/lib/prisma');
       return { prisma };
     } });
     const { loadLeaderboard } = exports;
     const all = await loadLeaderboard('classic', 100, null);
-    assert.equal(all.find(row => row.portal_user_id === 42).total_levels, 10);
+    assert.equal(all.find(row => row.portal_user_id === 42).total_levels, 2);
     assert.equal(all.find(row => row.portal_user_id === 42).username, 'current-name');
     assert.equal(all.filter(row => row.portal_user_id === 42).length, 1);
-    assert.equal(all.find(row => row.portal_user_id === 43).total_levels, 11);
     assert.equal(all.find(row => row.portal_user_id === 45).total_levels, 2);
-    assert.equal(all.some(row => row.portal_user_id === 0 || row.portal_user_id === 44), false);
+    assert.equal(all.some(row => [0, 43, 44].includes(row.portal_user_id)), false);
 
     const visible = await loadLeaderboard('classic', 10, 42);
     assert.equal(visible.length, 11);
     assert.equal(visible.at(-1).portal_user_id, 42);
-    assert.equal(visible.at(-1).rank, 13);
+    assert.equal(visible.at(-1).rank, 12);
     const publicTop = await loadLeaderboard('classic', 10, null);
     assert.equal(publicTop.length, 10);
     assert.equal(publicTop.some(row => row.portal_user_id === 42), false);
+    const secondPage = await loadLeaderboard('classic', 10, 42, 10);
+    assert.equal(Array.from(secondPage, row => row.rank).join(','), '11,12,13');
+    assert.equal(secondPage.filter(row => row.portal_user_id === 42).length, 1);
 
     const math = await loadLeaderboard('math_tour', 10, 42);
-    assert.equal(math.find(row => row.portal_user_id === 42).total_levels, 5);
+    assert.equal(math.find(row => row.portal_user_id === 42).total_levels, 2);
     assert.equal(math.find(row => row.portal_user_id === 42).rank, 1);
     const combined = await loadLeaderboard(null, 100, null);
-    assert.equal(combined.find(row => row.portal_user_id === 42).total_levels, 15);
+    assert.equal(combined.find(row => row.portal_user_id === 42).total_levels, 4);
     assert.equal(combined.find(row => row.portal_user_id === 45).total_levels, 3);
   } finally {
     await prisma.$disconnect();
