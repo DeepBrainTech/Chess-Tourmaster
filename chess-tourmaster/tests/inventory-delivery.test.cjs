@@ -31,7 +31,7 @@ test('Tourmaster inventory receipts reject login tokens, another account/game, t
   }
 });
 
-test('Prisma delivery is atomic and idempotent, while Hint/Undo consumption stays in the Tourmaster database', {
+test('PostgreSQL: Prisma delivery is atomic and idempotent, while Hint/Undo consumption stays in the Tourmaster database', {
   skip: process.env.TOURMASTER_INVENTORY_DB_TEST !== '1'
 }, async () => {
   const { PrismaClient } = require('@prisma/client');

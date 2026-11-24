@@ -220,6 +220,63 @@ test('PostgreSQL: replay, account isolation, concurrent first clears, hint retri
       assert.equal(promotion[0].new_clear, false);
       assert.equal(promotion[0].new_three_stars, true);
     });
+
+    await t.test('Math Tour persists score boundaries and reports a first three-star result once', async () => {
+      const { replayGame } = load('lib/game/replay.ts');
+      const player = { user_id: 45, username: 'math-stars-test' };
+      const mode = 'math_tour';
+      const level = 1;
+      const bestKey = { portal_user_id_game_mode_level: { portal_user_id: player.user_id, game_mode: mode, level } };
+      const routes = {
+        27: [[0, 1], [2, 2], [0, 3], [1, 1], [2, 3], [3, 1], [1, 2], [0, 4]],
+        28: [[0, 1], [1, 3], [3, 4], [2, 2], [1, 4], [0, 2], [2, 3], [0, 4]],
+        31: [[0, 1], [1, 3], [3, 2], [1, 1], [0, 3], [2, 2], [1, 0], [0, 2], [2, 3], [0, 4]],
+        35: [[0, 1], [2, 2], [0, 3], [1, 1], [3, 2], [4, 4], [2, 3], [3, 1], [1, 2], [0, 4]],
+      };
+      const movesFor = (score) => routes[score].map(([r, c]) => ({ r, c }));
+      for (const score of [27, 28, 31, 35]) {
+        const beforeKing = replayGame(level, mode, movesFor(score).slice(0, -1), false);
+        assert.equal(beforeKing.currentScore, score);
+      }
+
+      const invalid = await startAttempt(player, level, mode);
+      await assert.rejects(finishAttempt(player, invalid.attempt_id, movesFor(27)), /INVALID_SOLUTION/);
+      const unfinished = await prisma.gameAttempt.findUniqueOrThrow({ where: { id: invalid.attempt_id } });
+      assert.equal(unfinished.finished_at, null);
+      assert.equal(unfinished.stars, null);
+      assert.equal(await prisma.levelBest.findUnique({ where: bestKey }), null);
+
+      const events = () => prisma.achievementNotification.findMany({
+        where: { portal_user_id: player.user_id, game_mode: mode },
+        orderBy: { three_stars: 'asc' },
+        select: { attempt_id: true, clears: true, three_stars: true, new_clear: true, new_three_stars: true },
+      });
+      assert.deepEqual(await events(), []);
+
+      async function clearWithScore(score, stars, bestStars) {
+        const attempt = await startAttempt(player, level, mode);
+        const result = await finishAttempt(player, attempt.attempt_id, movesFor(score));
+        assert.equal(result.stars, stars);
+        assert.equal((await prisma.gameAttempt.findUniqueOrThrow({ where: { id: attempt.attempt_id } })).stars, stars);
+        assert.equal((await prisma.levelBest.findUniqueOrThrow({ where: bestKey })).best_stars, bestStars);
+        return attempt.attempt_id;
+      }
+
+      const firstClear = await clearWithScore(28, 1, 1);
+      await clearWithScore(31, 2, 2);
+      const clearEvent = { attempt_id: firstClear, clears: 1, three_stars: 0, new_clear: true, new_three_stars: false };
+      assert.deepEqual(await events(), [clearEvent]);
+
+      const firstThreeStars = await clearWithScore(35, 3, 3);
+      assert.equal((await finishAttempt(player, firstThreeStars, movesFor(35))).stars, 3);
+      await clearWithScore(28, 1, 3);
+      await clearWithScore(35, 3, 3);
+      assert.equal((await prisma.levelBest.findUniqueOrThrow({ where: bestKey })).clear_count, 5);
+      assert.deepEqual(await events(), [
+        clearEvent,
+        { attempt_id: firstThreeStars, clears: 1, three_stars: 1, new_clear: false, new_three_stars: true },
+      ]);
+    });
   } finally {
     await prisma.$disconnect();
     await admin.$executeRawUnsafe(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);

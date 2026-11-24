@@ -31,9 +31,6 @@ jobs:
     env:
       DATABASE_URL: postgresql://tourmaster:ci-only-password@localhost:5432/tourmaster_test
       TOURMASTER_TEST_DATABASE_URL: postgresql://tourmaster:ci-only-password@localhost:5432/tourmaster_test
-      TOURMASTER_GAME_DB_TEST: '1'
-      TOURMASTER_INVENTORY_DB_TEST: '1'
-      TOURMASTER_LEADERBOARD_DB_TEST: '1'
       NEXT_TELEMETRY_DISABLED: '1'
     steps:
       - uses: actions/checkout@v4
@@ -44,5 +41,26 @@ jobs:
           cache-dependency-path: chess-tourmaster/package-lock.json
       - run: npm ci
       - run: npm run db:generate
-      - run: npm run check
-      - run: npm run build
+      - name: Lint and type check
+        run: |
+          npm run lint
+          npm run typecheck
+      - name: Game logic and unit tests
+        run: node --test --test-skip-pattern='^PostgreSQL:' tests/*.test.cjs
+      - name: PostgreSQL integration tests
+        shell: bash
+        env:
+          TOURMASTER_GAME_DB_TEST: '1'
+          TOURMASTER_INVENTORY_DB_TEST: '1'
+          TOURMASTER_LEADERBOARD_DB_TEST: '1'
+        run: |
+          report="$(mktemp)"
+          trap 'rm -f "$report"' EXIT
+          node --test --test-reporter=tap --test-name-pattern='^PostgreSQL:' \
+            tests/game-database.test.cjs tests/inventory-delivery.test.cjs tests/leaderboard.test.cjs | tee "$report"
+          grep -Fxq '1..3' "$report" && grep -Fxq '# skipped 0' "$report" || {
+            echo "::error::Expected all three PostgreSQL suites to run without skips"
+            exit 1
+          }
+      - name: Production build
+        run: npm run build

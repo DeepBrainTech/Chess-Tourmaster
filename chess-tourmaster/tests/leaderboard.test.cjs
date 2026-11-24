@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const { backfillLevelBests } = require('../prisma/backfill-level-bests.cjs');
 
-test('leaderboard ranks distinct clears, keeps global ranks across pages and returns the viewer', {
+test('PostgreSQL: leaderboard ranks distinct clears, keeps global ranks across pages and returns the viewer', {
   skip: process.env.TOURMASTER_LEADERBOARD_DB_TEST !== '1',
 }, async () => {
   const { PrismaClient } = require('@prisma/client');
