@@ -4,6 +4,7 @@ import { ensureUserHint } from '@/lib/userHint';
 import { LEVEL_VERSION, MAX_LEVELS, calculateStars } from './rules';
 import { replayGame } from './replay';
 import { getHintMove } from './hint';
+import { queueAchievementProgress } from './achievementNotifications';
 import { createHash } from 'node:crypto';
 import type { GameMode } from './types';
 
@@ -26,10 +27,10 @@ async function unlockedLevel(tx: Prisma.TransactionClient, userId: number, mode:
     portal_user_id_game_mode: { portal_user_id: userId, game_mode: mode },
   } });
   if (progress) return Math.max(1, Math.min(MAX_LEVELS, progress.max_unlocked_level));
-  const legacy = await tx.levelRecord.aggregate({
+  const bests = await tx.levelBest.aggregate({
     where: { portal_user_id: userId, game_mode: mode, level: { gte: 1, lte: MAX_LEVELS } }, _max: { level: true },
   });
-  return Math.min(MAX_LEVELS, (legacy._max.level ?? 0) + 1);
+  return Math.min(MAX_LEVELS, (bests._max.level ?? 0) + 1);
 }
 
 export async function startAttempt(user: Identity, level: unknown, mode: unknown) {
@@ -89,11 +90,26 @@ export async function finishAttempt(user: Identity, id: unknown, moves: unknown)
       const now = new Date();
       activeMs += attempt.resumed_at ? Math.max(0, now.getTime() - attempt.resumed_at.getTime()) : 0;
       stars = calculateStars(mode, state.currentScore, state.requiredScore, activeMs / 1000, state.parTime);
-      const completed = await tx.levelRecord.findFirst({ where: { portal_user_id: user.user_id, game_mode: mode, level: attempt.level } });
-      await tx.levelRecord.create({ data: {
-        portal_user_id: user.user_id, username: user.username, game_mode: mode, level: attempt.level,
-        moves_count: state.history.length, time_seconds: Math.floor(activeMs / 1000), stars,
-      } });
+      const key = { portal_user_id: user.user_id, game_mode: mode, level: attempt.level };
+      const where = { portal_user_id_game_mode_level: key };
+      const completed = await tx.levelBest.findUnique({ where });
+      const timeSeconds = Math.floor(activeMs / 1000);
+      const moves = state.history.length;
+      const bests = {
+        best_stars: Math.max(completed?.best_stars ?? stars, stars),
+        best_time_seconds: Math.min(completed?.best_time_seconds ?? timeSeconds, timeSeconds),
+        best_moves: Math.min(completed?.best_moves ?? moves, moves),
+      };
+      await tx.levelBest.upsert({
+        where,
+        create: { ...key, ...bests, first_cleared_at: now },
+        update: { ...bests, clear_count: { increment: 1 } },
+      });
+      const newClear = !completed;
+      const newThreeStars = stars === 3 && completed?.best_stars !== 3;
+      if (newClear || newThreeStars) {
+        await queueAchievementProgress(tx, attempt.id, user.user_id, mode, newClear, newThreeStars);
+      }
       const next = Math.max(unlocked, Math.min(MAX_LEVELS, attempt.level + 1));
       await tx.modeProgress.upsert({ where: { portal_user_id_game_mode: { portal_user_id: user.user_id, game_mode: mode } },
         create: { portal_user_id: user.user_id, username: user.username, game_mode: mode, max_unlocked_level: next },
@@ -102,7 +118,7 @@ export async function finishAttempt(user: Identity, id: unknown, moves: unknown)
         hint_count: { increment: 1 }, undo_count: { increment: 1 },
       } });
       await tx.gameAttempt.update({ where: { id: attempt.id }, data: {
-        finished_at: now, resumed_at: null, active_ms: activeMs, stars, moves_count: state.history.length,
+        finished_at: now, resumed_at: null, active_ms: activeMs, stars, moves_count: moves, summarized: true,
       } });
     }
     const inventory = await tx.userHint.findUniqueOrThrow({ where: { portal_user_id: user.user_id },

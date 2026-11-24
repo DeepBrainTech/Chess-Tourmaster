@@ -10,7 +10,7 @@ function fixture() {
   let attempt = { id, portal_user_id: 42, game_mode: 'classic', level: 1, level_version: 2,
     started_at: new Date(Date.now() - 100000), resumed_at: null, active_ms: 100000, finished_at: null, stars: null };
   let progress = { max_unlocked_level: 1 };
-  const records = [], hints = new Map(), events = [];
+  const records = [], hints = new Map(), events = [], pending = [];
   const tx = {
     userHint: {
       upsert: async () => balance,
@@ -31,14 +31,21 @@ function fixture() {
     },
     modeProgress: { findUnique: async () => { events.push('read-progress'); return progress; },
       upsert: async ({ update }) => { progress = update; } },
-    levelRecord: { aggregate: async () => ({ _max: { level: null } }), findFirst: async () => records[0] ?? null,
-      create: async ({ data }) => { records.push(data); return data; } },
+    levelBest: { aggregate: async () => ({ _max: { level: null } }), findUnique: async () => records[0] ?? null,
+      upsert: async ({ create, update }) => {
+        if (records.length === 0) records.push({ ...create, clear_count: 1 });
+        else records[0] = { ...records[0], ...update, clear_count: records[0].clear_count + update.clear_count.increment };
+        return records[0];
+      },
+      findMany: async () => records,
+    },
+    achievementNotification: { create: async ({ data }) => { pending.push(data); } },
     attemptHint: { findUnique: async ({ where }) => hints.get(where.attempt_id_position_key.position_key) ?? null,
       create: async ({ data }) => { hints.set(data.position_key, data); } },
   };
   const prisma = { ...tx, $transaction: async fn => fn(tx) };
   const load = createLoader({ '@/lib/prisma': { prisma } });
-  return { api: load('lib/game/attempts.ts'), load, id, records, hints, events,
+  return { api: load('lib/game/attempts.ts'), load, id, records, hints, events, pending,
     setAttempt: data => { attempt = { ...attempt, ...data }; }, get balance() { return balance; } };
 }
 
@@ -74,12 +81,16 @@ test('server derives time, stars, moves and unlocks from its attempt and replay;
   assert.equal(saved.stars, 1);
   assert.equal(saved.time_seconds, 100);
   assert.equal(saved.total_levels, 2);
-  assert.equal(f.records[0].moves_count, solution.length);
+  assert.equal(f.records[0].best_moves, solution.length);
   assert.equal(f.balance.hint_count, 4);
   assert.equal(f.balance.undo_count, 2);
   await f.api.transitionAttempt(user, f.id, 'pause');
   assert.deepEqual(await f.api.finishAttempt(user, f.id, solution), saved);
   assert.equal(f.records.length, 1);
+  assert.deepEqual(f.pending, [{
+    attempt_id: f.id, portal_user_id: user.user_id, game_mode: 'classic',
+    clears: 1, three_stars: 0, new_clear: true, new_three_stars: false,
+  }]);
   assert.equal(f.balance.hint_count, 4);
 });
 

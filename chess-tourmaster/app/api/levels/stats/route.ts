@@ -1,16 +1,10 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { MAX_LEVELS } from '@/lib/game/rules';
 import { jsonResponse, optionsResponse } from '@/lib/http';
 
-type LevelStatSummary = {
-  level: number;
-  attempts: number;
-  best_moves: number;
-  best_time: number;
-  total_stars: number;
-  best_stars: number;
-};
+const RECENT_CLEARS_LIMIT = 10;
 
 /**
  * 获取用户的关卡统计数据
@@ -21,81 +15,73 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
   try {
     const { searchParams } = new URL(request.url);
     const level = searchParams.get('level');
+    const levelNum = level ? parseInt(level, 10) : undefined;
     const gameMode = searchParams.get('game_mode');
     const modeFilter = gameMode === 'classic' || gameMode === 'math_tour' ? gameMode : null;
+    const where = {
+      portal_user_id: payload.user_id,
+      level: { gte: 1, lte: MAX_LEVELS, equals: levelNum },
+      ...(modeFilter ? { game_mode: modeFilter } : {}),
+    };
 
-    if (level) {
-      const levelNum = parseInt(level, 10);
-      const records = await prisma.levelRecord.findMany({
-        where: {
-          portal_user_id: payload.user_id,
-          level: levelNum,
-          ...(modeFilter ? { game_mode: modeFilter } : {}),
-        },
-        orderBy: { completed_at: 'desc' },
-        take: 10,
-      });
+    const bests = await prisma.levelBest.groupBy({
+      by: ['level'],
+      where,
+      orderBy: { level: 'asc' },
+      _sum: { clear_count: true },
+      _min: { best_moves: true, best_time_seconds: true },
+      _max: { best_stars: true },
+    });
 
-      const bestRecord = await prisma.levelRecord.findFirst({
-        where: {
-          portal_user_id: payload.user_id,
-          level: levelNum,
-          ...(modeFilter ? { game_mode: modeFilter } : {}),
-        },
-        orderBy: { moves_count: 'asc' },
-      });
+    if (levelNum !== undefined) {
+      const [archived, recent] = await Promise.all([
+        prisma.levelRecord.findMany({ where, orderBy: { completed_at: 'desc' }, take: RECENT_CLEARS_LIMIT }),
+        prisma.gameAttempt.findMany({
+          where: { ...where, summarized: true, finished_at: { not: null } },
+          orderBy: { finished_at: 'desc' },
+          take: RECENT_CLEARS_LIMIT,
+        }),
+      ]);
+      const recentRecords = recent.map(attempt => ({
+        id: attempt.id,
+        portal_user_id: attempt.portal_user_id,
+        username: payload.username,
+        level: attempt.level,
+        moves_count: attempt.moves_count,
+        time_seconds: Math.floor(attempt.active_ms / 1000),
+        stars: attempt.stars,
+        game_mode: attempt.game_mode,
+        completed_at: attempt.finished_at!,
+      }));
+      const latest = [...archived, ...recentRecords]
+        .sort((a, b) => b.completed_at.getTime() - a.completed_at.getTime())
+        .slice(0, RECENT_CLEARS_LIMIT);
 
       return jsonResponse({
         success: true,
         data: {
           level: levelNum,
-          records: records,
-          best_moves: bestRecord?.moves_count || null,
-          best_time: bestRecord?.time_seconds || null,
-          attempts: records.length,
+          records: latest,
+          best_moves: bests[0]?._min.best_moves ?? null,
+          best_time: bests[0]?._min.best_time_seconds ?? null,
+          attempts: latest.length,
         },
       }, undefined, origin);
     } else {
-      // 获取所有关卡的概览
-      const allRecords = await prisma.levelRecord.findMany({
-        where: {
-          portal_user_id: payload.user_id,
-          ...(modeFilter ? { game_mode: modeFilter } : {}),
-        },
-        orderBy: { level: 'asc' },
-      });
-
-      // 按关卡分组统计
-      const levelStats = allRecords.reduce<Record<number, LevelStatSummary>>((acc, record) => {
-        if (!acc[record.level]) {
-          acc[record.level] = {
-            level: record.level,
-            attempts: 0,
-            best_moves: record.moves_count,
-            best_time: record.time_seconds,
-            total_stars: 0,
-            best_stars: 0,
-          };
-        }
-        acc[record.level].attempts++;
-        if (record.moves_count < acc[record.level].best_moves) {
-          acc[record.level].best_moves = record.moves_count;
-        }
-        if (record.time_seconds < acc[record.level].best_time) {
-          acc[record.level].best_time = record.time_seconds;
-        }
-        const levelBestStars = Math.max(acc[record.level].best_stars, record.stars);
-        acc[record.level].best_stars = levelBestStars;
-        // Keep legacy field for compatibility with existing frontend usage.
-        acc[record.level].total_stars = levelBestStars;
-        return acc;
-      }, {});
+      const levels = bests.map(best => ({
+        level: best.level,
+        attempts: best._sum.clear_count ?? 0,
+        best_moves: best._min.best_moves,
+        best_time: best._min.best_time_seconds,
+        total_stars: best._max.best_stars,
+        best_stars: best._max.best_stars,
+      }));
 
       return jsonResponse({
         success: true,
         data: {
-          levels: Object.values(levelStats),
-          total_attempts: allRecords.length,
+          levels,
+          total_attempts: levels.reduce((total, level) => total + level.attempts, 0),
         },
       }, undefined, origin);
     }

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { MAX_LEVELS } from '@/lib/game/rules';
 import { jsonResponse, optionsResponse } from '@/lib/http';
 import { ensureUserHint } from '@/lib/userHint';
 
@@ -30,17 +31,18 @@ export const GET = requireAuth(async (request: NextRequest, payload) => {
 
       let modeUnlockedLevel = 1;
       if (modeProgress?.max_unlocked_level != null) {
-        modeUnlockedLevel = Math.max(1, Math.min(100, Math.floor(modeProgress.max_unlocked_level)));
+        modeUnlockedLevel = Math.max(1, Math.min(MAX_LEVELS, Math.floor(modeProgress.max_unlocked_level)));
       } else {
-        const modeMax = await prisma.levelRecord.aggregate({
+        const modeMax = await prisma.levelBest.aggregate({
           where: {
             portal_user_id: payload.user_id,
             game_mode: gameMode,
+            level: { gte: 1, lte: MAX_LEVELS },
           },
           _max: { level: true },
         });
         const maxCompleted = modeMax._max.level ?? 0;
-        modeUnlockedLevel = Math.max(1, Math.min(100, maxCompleted + 1));
+        modeUnlockedLevel = Math.max(1, Math.min(MAX_LEVELS, maxCompleted + 1));
       }
 
       return jsonResponse(

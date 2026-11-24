@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { backfillLevelBests } = require('../prisma/backfill-level-bests.cjs');
 
 test('leaderboard ranks distinct clears, keeps global ranks across pages and returns the viewer', {
   skip: process.env.TOURMASTER_LEADERBOARD_DB_TEST !== '1',
@@ -21,7 +22,12 @@ test('leaderboard ranks distinct clears, keeps global ranks across pages and ret
     await admin.$executeRawUnsafe(`CREATE SCHEMA ${schema}`);
     await prisma.$executeRawUnsafe(`CREATE TABLE level_records (
       portal_user_id INTEGER, username TEXT, game_mode TEXT, level INTEGER,
+      stars INTEGER NOT NULL DEFAULT 1, time_seconds INTEGER NOT NULL DEFAULT 20, moves_count INTEGER NOT NULL DEFAULT 24,
       completed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+    await prisma.$executeRawUnsafe(`CREATE TABLE level_bests (
+      portal_user_id INTEGER, game_mode TEXT, level INTEGER, best_stars INTEGER, best_time_seconds INTEGER,
+      best_moves INTEGER, first_cleared_at TIMESTAMP, clear_count INTEGER,
+      PRIMARY KEY (portal_user_id, game_mode, level))`);
     await prisma.$executeRawUnsafe(`CREATE TABLE mode_progress (
       portal_user_id INTEGER, username TEXT, game_mode TEXT, max_unlocked_level INTEGER,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
@@ -45,6 +51,7 @@ test('leaderboard ranks distinct clears, keeps global ranks across pages and ret
     await prisma.$executeRawUnsafe(`INSERT INTO level_records (portal_user_id, username, game_mode, level)
       SELECT n, 'leader-' || n, 'classic', level FROM generate_series(1, 11) n
       CROSS JOIN LATERAL generate_series(1, 20 + n) level`);
+    await backfillLevelBests(prisma);
 
     const code = ts.transpileModule(fs.readFileSync(path.join(__dirname, '../lib/leaderboard.ts'), 'utf8'), {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },

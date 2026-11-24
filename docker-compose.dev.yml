@@ -26,6 +26,7 @@ services:
       NEXT_TELEMETRY_DISABLED: "1"
       DATABASE_URL: postgresql://postgres:postgres@game-db:5432/chess_tourmaster
       NEXT_PUBLIC_PORTAL_API_BASE: ${PORTAL_API_URL:-http://localhost:8000}
+      PORTAL_INTERNAL_API_URL: ${PORTAL_INTERNAL_API_URL:-http://host.docker.internal:8000}
       NEXT_PUBLIC_PORTAL_URL: ${PORTAL_URL:-http://localhost:3000}
       NEXT_PUBLIC_API_URL: ""
       # Webpack polls the bind-mounted source on Docker Desktop.

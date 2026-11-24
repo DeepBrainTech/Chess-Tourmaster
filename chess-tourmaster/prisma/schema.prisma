@@ -23,7 +23,7 @@ model ModeProgress {
   @@map("mode_progress")
 }
 
-// Per-attempt level records (stars/time/moves).
+// Historical clears recorded before per-level bests were introduced.
 model LevelRecord {
   id             Int      @id @default(autoincrement())
   portal_user_id Int
@@ -39,6 +39,20 @@ model LevelRecord {
   @@index([portal_user_id, game_mode])
   @@index([portal_user_id, game_mode, level])
   @@map("level_records")
+}
+
+model LevelBest {
+  portal_user_id    Int
+  game_mode         String
+  level             Int
+  best_stars        Int
+  best_time_seconds Int
+  best_moves        Int
+  first_cleared_at  DateTime
+  clear_count       Int      @default(1)
+
+  @@id([portal_user_id, game_mode, level])
+  @@map("level_bests")
 }
 
 // Persistent hint inventory by user.
@@ -80,10 +94,27 @@ model GameAttempt {
   finished_at    DateTime?
   stars          Int?
   moves_count    Int?
+  summarized     Boolean   @default(false)
   hints          AttemptHint[]
+  achievement_notification AchievementNotification?
 
   @@index([portal_user_id])
   @@map("game_attempts")
+}
+
+model AchievementNotification {
+  attempt_id      String      @id @db.Uuid
+  portal_user_id  Int
+  game_mode       String
+  clears          Int
+  three_stars     Int
+  new_clear       Boolean
+  new_three_stars Boolean
+  next_attempt_at DateTime    @default(now())
+  attempt         GameAttempt @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
+
+  @@index([next_attempt_at])
+  @@map("achievement_notifications")
 }
 
 model AttemptHint {

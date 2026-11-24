@@ -11,16 +11,12 @@ type LeaderboardRow = {
 
 export async function loadLeaderboard(mode: string | null, limit: number, currentUserId: number | null, offset = 0) {
   const rows = await prisma.$queryRaw<LeaderboardRow[]>`
-    WITH clears AS (
-      SELECT portal_user_id, game_mode, level, MIN(completed_at) AS first_completed_at
-      FROM level_records
+    WITH scores AS (
+      SELECT portal_user_id, COUNT(*) AS total_levels, MAX(first_cleared_at) AS updated_at
+      FROM level_bests
       WHERE portal_user_id > 0 AND game_mode IN ('classic', 'math_tour')
         AND level BETWEEN 1 AND ${MAX_LEVELS}
         AND (${mode}::text IS NULL OR game_mode = ${mode})
-      GROUP BY portal_user_id, game_mode, level
-    ), scores AS (
-      SELECT portal_user_id, COUNT(*) AS total_levels, MAX(first_completed_at) AS updated_at
-      FROM clears
       GROUP BY portal_user_id
     ), ranked AS (
       SELECT scores.*, ROW_NUMBER() OVER (ORDER BY total_levels DESC, updated_at ASC, portal_user_id ASC) AS rank
