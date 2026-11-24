@@ -17,4 +17,5 @@ COPY . .
 EXPOSE 5173
 
 # Refresh mounted dependencies and initialize the isolated local database.
-CMD ["sh", "-c", "npm ci && npm run db:init && exec npm run dev -- --hostname 0.0.0.0 --port 5173"]
+# Use Webpack so WATCHPACK_POLLING can detect edits to bind-mounted source.
+CMD ["sh", "-c", "npm ci && npm run db:init && exec npm run dev -- --webpack --hostname 0.0.0.0 --port 5173"]

@@ -3,10 +3,12 @@ const assert = require('node:assert/strict');
 const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 const { createLoader } = require('./helpers/load-ts.cjs');
-const load = createLoader();
+const load = createLoader(Object.fromEntries([
+  'MathTour', 'ModesHome', 'GameNavigation', 'Tour',
+].map(name => [`./${name}.module.css`, {}])));
 const { getMathStarTargets, calculateStars } = load('lib/game/rules.ts');
 const MathStarProgress = load('components/game/MathStarProgress.tsx').default;
-const { TilesAndScoreBar } = load('components/game/GameHeader.tsx');
+const Tour = load('components/game/Tour.tsx').default;
 const render = (score, requiredScore = 31) => renderToStaticMarkup(React.createElement(MathStarProgress, { score, requiredScore }));
 
 test('visible integer star targets match server awards, including floating-point boundary cases', () => {
@@ -22,9 +24,14 @@ test('visible integer star targets match server awards, including floating-point
   }
 });
 
-test('compact score capsule shows all star thresholds and highlights only reached tiers', () => {
+test('score meter shows all star thresholds and highlights only reached tiers', () => {
   const before = render(0);
-  assert.match(before, /Score:/);
+  assert.match(before, /<meter [^>]*max="38" value="0" aria-label="Score"/);
+  assert.match(render(-3), /aria-valuetext="-3 points\./);
+  assert.match(render(-3), /inline-size:0%/);
+  assert.match(render(38), /inline-size:100%/);
+  assert.equal((render(34).match(/score-star-earned\.svg/g) ?? []).length, 2);
+  assert.equal((render(34).match(/score-star-empty\.svg/g) ?? []).length, 1);
   assert.match(before, /aria-label="1 star: 31 points"/);
   assert.match(before, /aria-label="2 stars: 34 points"/);
   assert.match(before, /aria-label="3 stars: 38 points"/);
@@ -43,10 +50,12 @@ test('compact score capsule shows all star thresholds and highlights only reache
   assert.doesNotMatch(render(30), /Finish at this score/);
 });
 
-test('the in-game bar exposes star targets only for Math Tour', () => {
-  const props = { tilesLeft: 15, gameTimeSeconds: 12, currentScore: 31, requiredScore: 31 };
-  const math = renderToStaticMarkup(React.createElement(TilesAndScoreBar, { ...props, gameMode: 'math_tour' }));
-  const classic = renderToStaticMarkup(React.createElement(TilesAndScoreBar, { ...props, gameMode: 'classic' }));
+test('the in-game panel exposes star targets only for Math Tour', () => {
+  const props = { level: 3, tilesLeft: 15, time: '00:12' };
+  const math = renderToStaticMarkup(React.createElement(Tour, {
+    ...props, mode: 'math_tour', score: 31, requiredScore: 31, history: [],
+  }));
+  const classic = renderToStaticMarkup(React.createElement(Tour, { ...props, mode: 'classic' }));
   assert.match(math, /Star score targets/);
   assert.match(math, /Finish at this score: 1 star/);
   assert.equal((math.match(/Star score targets/g) ?? []).length, 1);

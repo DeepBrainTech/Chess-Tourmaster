@@ -1,0 +1,315 @@
+.dialog.dialog {
+  --u: clamp(.5px, min(calc((100dvw - 24px) / 1133), calc((100dvh - 24px) / 1030)), 1px);
+  --step-column: calc(102.55 * var(--u));
+  --inset: #131a3d;
+  --gloss: #ffffff73;
+  --shade: #0b10304f;
+  inline-size: min(calc(100dvw - 24px), calc(1132.42 * var(--u)));
+  padding: calc(48 * var(--u)) calc(40 * var(--u)) calc(16 * var(--u));
+  scroll-padding-block: 12px;
+  color-scheme: dark;
+}
+
+.dialog .panel {
+  --mode-color: #2fa8ff;
+  --section-gap: calc(28 * var(--u));
+  display: block;
+  padding: calc(60 * var(--u)) calc(80 * var(--u)) calc(40 * var(--u));
+  text-align: start;
+}
+
+.dialog .panel[data-mode='math_tour'] {
+  --mode-color: #a45cff;
+  --section-gap: calc(32 * var(--u));
+  padding-block-start: calc(80 * var(--u));
+}
+
+.dialog :is(h1, h2) { font-family: inherit; }
+
+.dialog .heading {
+  inset-block-start: calc(-52 * var(--u));
+  translate: -50% 0;
+  background: var(--mode-color);
+  box-shadow: inset 0 calc(-6 * var(--u)) var(--shade), inset 0 calc(3 * var(--u)) var(--gloss);
+  line-height: 1.12;
+  text-shadow: calc(3 * var(--u)) calc(6 * var(--u)) black;
+}
+
+.tabs {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: calc(-52 * var(--u));
+  inset-inline-start: 50%;
+  translate: -50% 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(24 * var(--u));
+  inline-size: min(calc(550 * var(--u)), 100%);
+  padding: calc(8 * var(--u));
+  border: calc(5 * var(--u)) solid var(--outline);
+  border-radius: calc(20 * var(--u));
+  background: var(--inset);
+}
+
+.tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(2 * var(--u));
+  min-block-size: max(44px, calc(60 * var(--u)));
+  border-radius: calc(20 * var(--u));
+  font-size: max(.75rem, calc(28 * var(--u)));
+  line-height: 1;
+  text-transform: uppercase;
+  text-shadow: calc(1.57 * var(--u)) calc(3.14 * var(--u)) black;
+}
+
+.tabs button[aria-selected='true'] {
+  background: #a45cff;
+  box-shadow: inset 0 calc(-4 * var(--u)) var(--shade), inset 0 calc(3 * var(--u)) var(--gloss);
+}
+
+.tabs button:focus-visible { outline: 2px solid white; outline-offset: 2px; }
+
+.tabIcon, .badgeIcon, .doneIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+}
+
+.tabIcon, .doneIcon {
+  inline-size: calc(53.75 * var(--u));
+  block-size: calc(56.71 * var(--u));
+}
+
+.dialog .close {
+  inset-block-start: calc(-43 * var(--u));
+  inset-inline-end: calc(-43 * var(--u));
+  inline-size: calc(72 * var(--u));
+  block-size: calc(74 * var(--u));
+}
+
+.rules {
+  display: grid;
+  justify-items: center;
+  gap: var(--section-gap);
+}
+
+.badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(6 * var(--u));
+  padding: calc(2 * var(--u)) calc(16 * var(--u)) calc(6 * var(--u));
+  border: max(1px, calc(3 * var(--u))) solid var(--outline);
+  border-radius: calc(13 * var(--u));
+  background: var(--mode-color);
+  box-shadow: inset 0 calc(-4 * var(--u)) var(--shade), inset 0 calc(2 * var(--u)) var(--gloss);
+  font-size: max(.875rem, calc(24 * var(--u)));
+  line-height: 1;
+  text-transform: uppercase;
+  text-shadow: calc(1.32 * var(--u)) calc(2.65 * var(--u)) black;
+}
+
+.badgeIcon {
+  inline-size: calc(32 * var(--u));
+  block-size: calc(33.76 * var(--u));
+}
+
+.badge, .tabs button, .warningBody h2 {
+  paint-order: stroke fill;
+  -webkit-text-stroke: calc(3 * var(--u)) var(--outline);
+}
+
+.stepList {
+  position: relative;
+  inline-size: 100%;
+  padding-inline-end: calc(1.86 * var(--u));
+}
+
+.stepLine {
+  position: absolute;
+  inset-block: calc(46 * var(--u));
+  inset-inline-start: calc(var(--step-column) / 2);
+  inline-size: calc(7 * var(--u));
+  container-type: size;
+  pointer-events: none;
+}
+
+.stepLine::before {
+  content: '';
+  position: absolute;
+  inset: 50% auto auto 0;
+  inline-size: calc(378.99 * var(--u));
+  inline-size: 100cqh;
+  block-size: calc(7 * var(--u));
+  background: url('/how-to-play/step-line.png') center / 100% 100% no-repeat;
+  transform: translate(-50%, -50%) rotate(90deg) scaleY(-1);
+}
+
+.steps {
+  position: relative;
+  display: grid;
+  gap: calc(18.4 * var(--u));
+}
+
+.steps li {
+  display: grid;
+  grid-template-columns: var(--step-column) minmax(0, 1fr);
+  align-items: center;
+  gap: calc(20 * var(--u));
+}
+
+.stepNumber {
+  position: relative;
+  display: grid;
+  place-items: center;
+  translate: 0 calc(-2 * var(--u));
+  font-size: calc(36 * var(--u));
+  paint-order: stroke fill;
+  -webkit-text-stroke: calc(2 * var(--u)) var(--outline);
+  text-shadow: calc(1 * var(--u)) calc(2 * var(--u)) black;
+}
+
+.stepNumber span { position: absolute; translate: 0 calc(-4 * var(--u)); }
+.stepNumber img { inline-size: calc(79.93 * var(--u)); block-size: auto; }
+
+.step {
+  display: grid;
+  grid-template-columns: calc(70 * var(--u)) minmax(0, 1fr);
+  align-items: center;
+  gap: calc(24 * var(--u));
+  min-block-size: calc(104 * var(--u));
+  padding: calc(10 * var(--u)) calc(30 * var(--u)) calc(10 * var(--u)) calc(12 * var(--u));
+  border: max(2px, calc(5 * var(--u))) solid var(--outline);
+  border-radius: calc(30 * var(--u));
+  background: var(--inset);
+}
+
+.stepIcon {
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+  inline-size: calc(72 * var(--u));
+  block-size: calc(74 * var(--u));
+  border: max(1px, calc(2 * var(--u))) solid var(--outline);
+  border-radius: calc(17.5 * var(--u));
+  background: var(--icon-color, #2fa8ff);
+  box-shadow: inset 0 calc(-5.25 * var(--u)) var(--shade), inset 0 calc(3.5 * var(--u)) var(--gloss);
+}
+
+.stepIcon img { max-inline-size: none; }
+.stepIcon[data-color='purple'] { --icon-color: #a45cff; }
+.stepIcon[data-color='red'] { --icon-color: #ff4d5e; }
+.stepIcon[data-color='yellow'] { --icon-color: #ffc83d; }
+.stepIcon[data-color='green'] { --icon-color: #5bd63a; }
+.stepIcon[data-color='orange'] { --icon-color: #ff8a2b; }
+
+/* The target and flame are compressed vertically in the Figma instances. */
+.stepIcon[data-color='orange'] img { scale: 1 .48; }
+
+.step h2 {
+  margin-block-end: calc(4 * var(--u));
+  font-size: max(1rem, calc(32 * var(--u)));
+  line-height: 1.05;
+  text-shadow: calc(1.53 * var(--u)) calc(3.06 * var(--u)) black;
+}
+
+.step p {
+  color: #c9d2ff;
+  font-size: max(.8125rem, calc(24 * var(--u)));
+  line-height: 1.14;
+}
+
+.footer {
+  display: grid;
+  justify-items: center;
+  gap: calc(14 * var(--u));
+  inline-size: 100%;
+  padding-block-start: calc(7 * var(--u));
+}
+
+.warning {
+  inline-size: min(100%, calc(513.38 * var(--u)));
+  padding: calc(5 * var(--u));
+  border-radius: calc(35 * var(--u));
+  background: var(--outline);
+  rotate: -2deg;
+}
+
+.warningBody {
+  display: grid;
+  grid-template-columns: calc(82.74 * var(--u)) minmax(0, 1fr);
+  align-items: center;
+  gap: calc(18 * var(--u));
+  padding: calc(20 * var(--u));
+  border-radius: calc(30 * var(--u));
+  background: #ff8a2b;
+  box-shadow: inset 0 calc(-12 * var(--u)) var(--shade), inset 0 calc(8 * var(--u)) var(--gloss);
+}
+
+.panel[data-mode='math_tour'] .warningBody { inline-size: calc(100% + 33 * var(--u)); }
+
+.fireIcon {
+  display: grid;
+  place-items: center;
+  inline-size: calc(83 * var(--u));
+  block-size: calc(83 * var(--u));
+  border: max(1px, calc(3 * var(--u))) solid var(--outline);
+  border-radius: 50%;
+  background: #2a3366;
+  box-shadow: 0 calc(4 * var(--u)) var(--outline), inset 0 calc(-6 * var(--u)) var(--shade),
+    inset 0 calc(4 * var(--u)) var(--gloss);
+}
+
+.fireIcon img { scale: 1 .49; }
+
+.warningBody p { font-size: max(.8125rem, calc(22 * var(--u))); line-height: 1.05; }
+
+.warningBody .warningLabel {
+  color: var(--outline);
+  font-size: max(.875rem, calc(24 * var(--u)));
+  text-transform: uppercase;
+}
+
+.warningBody h2 {
+  margin-block: calc(2 * var(--u));
+  font-size: max(1rem, calc(30 * var(--u)));
+  line-height: 1.05;
+  text-shadow: calc(1.53 * var(--u)) calc(3.06 * var(--u)) black;
+}
+
+.dialog .done {
+  gap: calc(10 * var(--u));
+  inline-size: min(100%, calc(316.75 * var(--u)));
+  min-block-size: max(44px, calc(92.71 * var(--u)));
+  padding-inline-end: calc(10 * var(--u));
+  background: #5bd63a;
+  font-size: calc(48 * var(--u));
+  text-transform: uppercase;
+  paint-order: stroke fill;
+  -webkit-text-stroke: calc(6 * var(--u)) var(--outline);
+  text-shadow: calc(3 * var(--u)) calc(6 * var(--u)) black;
+}
+
+@media (max-width: 620px) {
+  .dialog.dialog {
+    --step-column: calc(88 * var(--u));
+    padding: 30px 6px 12px;
+  }
+
+  .dialog .panel { padding-inline: 10px; }
+  .dialog .panel[data-mode] { padding-block-start: 38px; }
+  .dialog .heading { padding-inline: calc(24 * var(--u)); font-size: clamp(1rem, 6vw, calc(56 * var(--u))); }
+  .tabs { gap: calc(12 * var(--u)); inline-size: min(275px, calc(100% - 50px)); inset-inline-start: 5px; translate: none; }
+  .tabs button { gap: 0; }
+  .tabIcon { inline-size: calc(47 * var(--u)); }
+  .dialog .close { inset-inline-end: -3px; }
+  .steps li { gap: 6px; }
+  .step { gap: 8px; padding-inline: 6px; }
+  .panel[data-mode='math_tour'] .warningBody { inline-size: 100%; }
+}
+
+@media (forced-colors: active) {
+  .tabs button[aria-selected='true'] { outline: 2px solid Highlight; outline-offset: -2px; }
+}

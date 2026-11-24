@@ -47,18 +47,19 @@ type AccountProps = {
   username?: string;
   coins?: number;
   shopUrl?: string;
+  coinDirectory?: 'modes' | 'portal';
   onLogin?: () => void;
   onSettings: () => void;
   onHelp?: () => void;
   children?: ReactNode;
 };
 
-export function GameAccount({ username, coins, shopUrl, onLogin, onSettings, onHelp, children }: AccountProps) {
+export function GameAccount({ username, coins, shopUrl, coinDirectory = 'portal', onLogin, onSettings, onHelp, children }: AccountProps) {
   return <div className={`${styles.account} ${onHelp ? styles.mapAccount : ''}`}>
     {children}
     {shopUrl && <a className={`${styles.pill} ${styles.coins}`} href={shopUrl} target="_blank" rel="noopener"
       aria-label={coins === undefined ? 'Shop (opens in a new tab), coin balance unavailable' : `Shop (opens in a new tab), ${coins} coins`}>
-      <GameIcon name="coin" width={30} height={30} directory="portal" />
+      <GameIcon name="coin" width={30} height={30} directory={coinDirectory} />
       <span>{coins?.toLocaleString('en-US') ?? '—'}</span>
       <span className={styles.roundIcon}><GameIcon name="plus" width={16} height={17} /></span>
     </a>}

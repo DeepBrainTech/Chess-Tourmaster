@@ -28,7 +28,6 @@ export default function Home() {
         onLogin={login}
         onPlay={login}
         onLeaderboard={login}
-        onHelp={login}
         onSettings={login}
       />
     );

@@ -1,0 +1,157 @@
+.dialog { color-scheme: dark; }
+.dialog .panel { gap: calc(32 * var(--u)); }
+
+.dialog .heading {
+  top: calc(-52 * var(--u));
+  translate: -50% 0;
+  background: #a45cff;
+  text-shadow: calc(3 * var(--u)) calc(6 * var(--u)) black;
+  box-shadow: inset 0 calc(-6 * var(--u)) #0b10304f, inset 0 calc(3 * var(--u)) #ffffff73;
+}
+
+.dialog .close { right: calc(-43 * var(--u)); }
+
+.options {
+  display: grid;
+  gap: calc(14 * var(--u));
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(10 * var(--u));
+  min-block-size: 44px;
+  padding: calc(14 * var(--u)) calc(20 * var(--u));
+  border: max(2px, calc(5 * var(--u))) solid var(--outline);
+  border-radius: calc(30 * var(--u));
+  background: #131a3d;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  gap: calc(7 * var(--u));
+  font-size: max(.75rem, calc(32 * var(--u)));
+  text-transform: uppercase;
+  text-shadow: calc(1.53 * var(--u)) calc(3.06 * var(--u)) black;
+}
+
+.optionIcon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: calc(69.5 * var(--u));
+  block-size: calc(72.5 * var(--u));
+}
+
+.switchRow { cursor: pointer; }
+
+.switchArtwork {
+  position: relative;
+  flex: none;
+  inline-size: calc(92 * var(--u));
+  block-size: calc(56 * var(--u));
+  background: url('/settings/toggle-off.svg') center / contain no-repeat;
+}
+
+.switchArtwork[data-on='true'] {
+  background:
+    url('/settings/toggle-face.svg') left calc(4 * var(--u)) top calc(4 * var(--u)) / calc(84 * var(--u)) calc(46 * var(--u)) no-repeat,
+    url('/settings/toggle-shadow.svg') left calc(2.5 * var(--u)) top calc(6.5 * var(--u)) / calc(87 * var(--u)) calc(49 * var(--u)) no-repeat;
+}
+
+.switchArtwork[data-on='true']::before,
+.switchArtwork[data-on='true']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.switchArtwork[data-on='true']::before {
+  background: url('/settings/toggle-gloss.svg') calc(-19 * var(--u)) calc(-19 * var(--u)) / calc(130 * var(--u)) calc(65 * var(--u)) no-repeat;
+  mask: url('/settings/toggle-gloss-mask.svg') calc(4 * var(--u)) calc(4 * var(--u)) / calc(84 * var(--u)) calc(46 * var(--u)) no-repeat;
+}
+
+.switchArtwork[data-on='true']::after {
+  background:
+    url('/settings/toggle-knob.svg') left calc(46.5 * var(--u)) top calc(8.5 * var(--u)) / calc(37 * var(--u)) calc(37 * var(--u)) no-repeat,
+    url('/settings/toggle-outline.svg') left calc(2.5 * var(--u)) top calc(2.5 * var(--u)) / calc(87 * var(--u)) calc(49 * var(--u)) no-repeat;
+}
+
+.switchRow:hover .switchArtwork { filter: brightness(1.1); }
+.switchRow input:focus-visible + .switchArtwork, .volumeControl input:focus-visible + .volumeArtwork {
+  border-radius: 999px;
+  outline: 2px solid white;
+  outline-offset: 3px;
+}
+
+.volumeOption {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(12 * var(--u));
+}
+
+.volumeControl {
+  position: relative;
+  display: grid;
+  align-items: center;
+  inline-size: min(100%, calc(312 * var(--u)));
+  min-block-size: 44px;
+}
+
+.volumeControl input {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.volumeArtwork {
+  position: relative;
+  display: grid;
+  place-items: center;
+  block-size: calc(44 * var(--u));
+  pointer-events: none;
+}
+
+.volumeSegments {
+  position: absolute;
+  inset-block-start: calc(11 * var(--u));
+  inset-inline-start: calc(12 * var(--u));
+  display: flex;
+  gap: calc(4 * var(--u));
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: calc(85 * var(--u));
+}
+
+.dialog .action {
+  gap: calc(8 * var(--u));
+  padding: calc(10 * var(--u)) calc(24 * var(--u)) calc(10 * var(--u)) calc(14 * var(--u));
+  border-radius: calc(24 * var(--u));
+  font-size: max(1rem, calc(36 * var(--u)));
+  line-height: normal;
+  text-transform: uppercase;
+  paint-order: stroke fill;
+  -webkit-text-stroke: calc(4 * var(--u)) var(--outline);
+  text-shadow: calc(2 * var(--u)) calc(4 * var(--u)) var(--outline);
+  box-shadow: 0 calc(4 * var(--u)) var(--outline), inset 0 calc(-6 * var(--u)) #0b10304f, inset 0 calc(4 * var(--u)) #ffffff73;
+}
+
+.action > span {
+  display: grid;
+  place-items: center;
+  inline-size: calc(41.806 * var(--u));
+  block-size: calc(44.111 * var(--u));
+}
+
+.dialog .rules { background: #ff4d5e; }
+.dialog .done { background: #5bd63a; }

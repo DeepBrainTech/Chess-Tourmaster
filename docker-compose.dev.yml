@@ -28,7 +28,8 @@ services:
       NEXT_PUBLIC_PORTAL_API_BASE: ${PORTAL_API_URL:-http://localhost:8000}
       NEXT_PUBLIC_PORTAL_URL: ${PORTAL_URL:-http://localhost:3000}
       NEXT_PUBLIC_API_URL: ""
-      WATCHPACK_POLLING: "true"
+      # Webpack polls the bind-mounted source on Docker Desktop.
+      WATCHPACK_POLLING: "1000"
     ports:
       - "127.0.0.1:5173:5173"
     volumes:

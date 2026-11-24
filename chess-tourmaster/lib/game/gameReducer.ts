@@ -10,7 +10,6 @@ export type GameAction =
   | { type: 'UNDO' }
   | { type: 'SET_GAME_TIME'; payload: number }
   | { type: 'SET_THEME'; payload: ThemeName }
-  | { type: 'SET_MAX_UNLOCKED_LEVEL'; payload: number }
   | { type: 'SET_LEVEL_STARS'; payload: Record<number, number> }
   | { type: 'UPSERT_LEVEL_STAR'; payload: { level: number; stars: number } }
   | { type: 'WIN_LEVEL' }
@@ -21,7 +20,6 @@ const deepCopyGrid = (grid: GameState['grid']) =>
 
 export const initialGameState: GameState = {
   level: 1,
-  maxUnlockedLevel: 1,
   levelStars: {},
   grid: [],
   knightPos: { r: 0, c: 0 },
@@ -49,7 +47,6 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         theme: state.theme,
         gameMode: action.payload,
         level: 1,
-        maxUnlockedLevel: 1,
         levelStars: {},
         savedGridConfig: null,
         scoreMultiplier: 1,
@@ -203,9 +200,6 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'SET_THEME':
       return { ...state, theme: THEME_CLASSES[action.payload] };
-
-    case 'SET_MAX_UNLOCKED_LEVEL':
-      return { ...state, maxUnlockedLevel: action.payload };
 
     case 'SET_LEVEL_STARS':
       return { ...state, levelStars: action.payload };

@@ -1,6 +1,7 @@
 /** Copy this module into a game's browser client. No framework dependencies. */
 export type Assets = { coins: number; diamonds: number; flowers: number };
 export type Cost = Partial<Assets>;
+export type ShopCatalog = Record<string, { name: string; games: string[]; cost: Cost; grants?: Record<string, number> }>;
 export type PurchaseRequest = { request_id: string; target: string };
 export type ItemRequest = { request_id: string; item_id: string };
 export type GameSession = {
@@ -78,9 +79,9 @@ export class PortalGameClient {
     return this.request("/api/user/shop/" + encodeURIComponent(this.gameKey) + "/quote", { signal });
   }
 
-  catalog(): Promise<{ items: Record<string, { name: string; games: string[]; cost: Assets }>; game_mode: string }> {
+  catalog(signal?: AbortSignal): Promise<{ items: ShopCatalog; game_mode: string }> {
     const query = new URLSearchParams({ game_mode: this.gameKey });
-    return this.request("/api/games/shop/catalog?" + query);
+    return this.request("/api/games/shop/catalog?" + query, { signal });
   }
 
   startSession(timezone?: string): Promise<GameSession & { assets: Assets }> {

@@ -2,6 +2,7 @@ import { useRef, useState, type Ref } from 'react';
 import Image from 'next/image';
 import type { GameMode } from '@/lib/game/types';
 import { MAX_LEVELS } from '@/lib/game/rules';
+import HowToPlayDialog from './HowToPlayDialog';
 import LevelMap, { type ModeProgress } from './LevelMap';
 import { GameAccount, GameIcon as Icon, GameLogo } from './GameArtwork';
 import styles from './ModesHome.module.css';
@@ -17,8 +18,8 @@ type Props = {
   onPlay: (mode: GameMode, level?: number) => void;
   onLeaderboard: () => void;
   leaderboardButtonRef?: Ref<HTMLButtonElement>;
-  onHelp: (mode?: GameMode) => void;
-  onSettings: () => void;
+  onMapHelp?: (mode: GameMode) => void;
+  onSettings: (mode?: GameMode) => void;
   onLogin?: () => void;
   busy?: boolean;
 };
@@ -30,17 +31,19 @@ const modes = [
 
 export default function ModesHome({
   username, coins, shopUrl, portalUrl, progress, initialMapMode, onCloseMap,
-  onPlay, onLeaderboard, leaderboardButtonRef, onHelp, onSettings, onLogin, busy,
+  onPlay, onLeaderboard, leaderboardButtonRef, onMapHelp, onSettings, onLogin, busy,
 }: Props) {
   const mapButton = useRef<HTMLButtonElement>(null);
   const [showMap, setShowMap] = useState(initialMapMode !== undefined);
+  const [showHelp, setShowHelp] = useState(false);
   const [mapMode, setMapMode] = useState<GameMode>(initialMapMode ?? 'classic');
   const stars = Object.values(progress ?? {}).reduce(
     (total, mode) => total + Object.values(mode.stars).reduce((sum, count) => sum + count, 0), 0,
   );
 
-  const account = <GameAccount username={username} coins={coins} shopUrl={shopUrl} onLogin={onLogin} onSettings={onSettings}
-    onHelp={showMap ? () => onHelp(mapMode) : undefined}>
+  const account = <GameAccount username={username} coins={coins} shopUrl={shopUrl} onLogin={onLogin}
+    onSettings={() => onSettings(showMap ? mapMode : undefined)}
+    onHelp={showMap && onMapHelp ? () => onMapHelp(mapMode) : undefined}>
     {!showMap && <div className={styles.pill} aria-label={`${stars} stars out of ${MAX_LEVELS * 3 * modes.length}`}>
       <Icon name="star" width={35} height={30} />
       <span>{stars}<span className={styles.muted}>/{MAX_LEVELS * 3 * modes.length}</span></span>
@@ -102,11 +105,13 @@ export default function ModesHome({
         <button ref={leaderboardButtonRef} type="button" className={`${styles.raised} ${styles.leaderboard}`} onClick={onLeaderboard}>
           <Icon name="leaderboard" width={37} height={33} /> Leaderboard
         </button>
-        <button type="button" className={`${styles.raised} ${styles.help}`} onClick={() => onHelp()}>
+        <button type="button" className={`${styles.raised} ${styles.help}`} aria-haspopup="dialog"
+          disabled={busy} onClick={() => setShowHelp(true)}>
           <Icon name="help" width={34} height={36} /> How to Play
         </button>
       </nav>
 
+      {showHelp && <HowToPlayDialog onClose={() => setShowHelp(false)} />}
     </main>
   );
 }

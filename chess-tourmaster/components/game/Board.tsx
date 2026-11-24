@@ -2,9 +2,10 @@
 
 import type { GameState } from '@/lib/game/types';
 import { isValidMove } from '@/lib/game/gameReducer';
-import Tile from './Tile';
+import MathTile from './MathTile';
+import FireTileEffect, { type FireTileState } from './FireTileEffect';
 import Image from 'next/image';
-import classicStyles from './ClassicTour.module.css';
+import classicStyles from './Tour.module.css';
 
 type Props = {
   state: GameState;
@@ -12,9 +13,11 @@ type Props = {
   shake: boolean;
   hintTarget: { r: number; c: number } | null;
   locked?: boolean;
+  showNextMoves?: boolean;
+  fire?: FireTileState;
 };
 
-export default function Board({ state, onMove, shake, hintTarget, locked = false }: Props) {
+export default function Board({ state, onMove, shake, hintTarget, locked = false, showNextMoves = true, fire }: Props) {
   const size = state.gridSizeVal;
   const classic = state.gameMode === 'classic';
 
@@ -31,26 +34,27 @@ export default function Board({ state, onMove, shake, hintTarget, locked = false
       id="game-board"
       data-mode={state.gameMode}
       inert={locked || undefined}
-      role={classic ? 'group' : undefined}
-      aria-label={classic ? 'Classic Tour chessboard' : undefined}
-      className={classic ? `${classicStyles.board} ${shake ? 'shake' : ''}` : `board-shell z-10 relative bg-slate-800/60 p-2 md:p-3 lg:p-4 rounded-xl shadow-2xl border-4 border-slate-600 backdrop-blur-md w-full max-w-[95vw] md:max-w-3xl lg:max-w-4xl aspect-square flex items-center justify-center mx-auto grid gap-1 md:gap-1.5 lg:gap-2 ${shake ? 'shake' : ''}`}
-      data-shake={classic && shake ? 'true' : undefined}
-      style={{ gridTemplateColumns: `repeat(${size}, 1fr)`, gridTemplateRows: classic ? `repeat(${size}, minmax(0, 1fr))` : undefined }}
+      role="group"
+      aria-label={classic ? 'Classic Tour chessboard' : 'Math Tour chessboard'}
+      className={`${classicStyles.board} ${shake ? 'shake' : ''}`}
+      data-shake={shake ? 'true' : undefined}
+      style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${size}, minmax(0, 1fr))` }}
     >
       {state.grid.flatMap((row, r) =>
         row.map((tile, c) => {
           const isKnight =
             state.knightPos.r === r && state.knightPos.c === c;
+          const fireEffect = isKnight && tile.hasFire ? fire : undefined;
           const valid =
-            state.isPlaying &&
+            showNextMoves && state.isPlaying &&
             !locked &&
             isValidMove(state, r, c);
           const isHintTarget =
             hintTarget != null &&
             hintTarget.r === r &&
             hintTarget.c === c;
+          const dimmed = hintTarget != null && !isKnight && !isHintTarget;
           if (classic) {
-            const dimmed = hintTarget != null && !isKnight && !isHintTarget;
             const empty = !isKnight && (tile.type === 'void' || tile.visited);
             if (empty) return <span key={`${r}-${c}`} className={classicStyles.emptyTile} data-dimmed={dimmed} aria-hidden="true" />;
             const piece = isKnight ? 'knight' : tile.type === 'king' ? 'king' : tile.hasFire ? 'fire' : undefined;
@@ -63,19 +67,22 @@ export default function Board({ state, onMove, shake, hintTarget, locked = false
               data-piece={piece} data-next={valid} data-hint={isHintTarget} data-dimmed={dimmed}
               data-burning={isKnight && tile.hasFire ? 'true' : undefined}
               aria-label={label} disabled={locked || !state.isPlaying || isKnight} onClick={() => onMove(r, c)}>
+              {fireEffect && <FireTileEffect {...fireEffect} />}
               {piece && <Image src={`/classic-tour/${piece}.svg`} alt="" fill unoptimized />}
               {valid && !piece && !isHintTarget && <span className={classicStyles.movePoint} aria-hidden="true" />}
             </button>;
           }
           return (
-            <Tile
+            <MathTile
               key={`${r}-${c}`}
               tile={tile}
               isKnight={isKnight}
-              isValidMove={valid}
-              isHintTarget={isHintTarget}
-              onClick={() => onMove(r, c)}
-              showQuestValue={state.gameMode === 'math_tour'}
+              valid={valid}
+              hinted={isHintTarget}
+              dimmed={dimmed}
+              locked={locked || !state.isPlaying}
+              onMove={onMove}
+              fire={fireEffect}
             />
           );
         })

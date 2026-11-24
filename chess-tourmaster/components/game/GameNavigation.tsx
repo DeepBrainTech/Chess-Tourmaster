@@ -12,9 +12,9 @@ function NavigationIcon({ icon, width, height }: { icon: string; width: number; 
     style={{ width: `calc(${width} * var(--u))`, height: `calc(${height} * var(--u))` }} />;
 }
 
-export function HomeButton({ onHome }: { onHome: () => void }) {
+export function HomeButton({ onHome, compact = false }: { onHome: () => void; compact?: boolean }) {
   return <button type="button" className={styles.home} onClick={onHome}>
-    <NavigationIcon icon="home" width={26} height={42} /> Home
+    <NavigationIcon icon="home" width={compact ? 20 : 26} height={compact ? 33 : 42} /> Home
   </button>;
 }
 

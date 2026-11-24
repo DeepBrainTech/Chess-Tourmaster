@@ -1,43 +1,82 @@
 import { getMathStarTargets } from '@/lib/game/rules';
+import type { ReactNode } from 'react';
+import { GameIcon } from './GameArtwork';
+import styles from './MathTour.module.css';
 
 type Props = { score: number; requiredScore: number };
+
+const milestonePositions = [291 / 440, 353 / 440, 415 / 440];
+
+export function MathScore({ score, requiredScore, children }: Props & { children?: ReactNode }) {
+  const target = Math.max(1, requiredScore);
+  const progress = Math.max(0, Math.min(score, target));
+
+  return <div className={styles.score} role="meter" aria-label="Score" aria-valuemax={target} aria-valuenow={progress}
+    aria-valuetext={`Score: ${score} of ${requiredScore} points`}>
+    <div className={styles.scoreTrack} aria-hidden="true">
+      <div className={styles.scoreFill} style={{ inlineSize: `${progress / target * 100}%` }} />
+    </div>
+    <span className={styles.scoreLabel} aria-hidden="true">Score <b>{score}/{requiredScore}</b></span>
+    {children}
+  </div>;
+}
+
+function pointsNeeded(points: number) {
+  return `${points} more ${points === 1 ? 'point' : 'points'}`;
+}
+
+function getFillPercent(score: number, targets: number[], earned: number) {
+  if (score < 0) return 0;
+  if (earned === targets.length) return 100;
+
+  // Interpolate between the score thresholds at the positions of the Figma milestones.
+  const previousTarget = targets[earned - 1] ?? 0;
+  const previousPosition = milestonePositions[earned - 1] ?? 0;
+  const progress = (score - previousTarget) / (targets[earned] - previousTarget);
+  return (previousPosition + progress * (milestonePositions[earned] - previousPosition)) * 100;
+}
 
 export default function MathStarProgress({ score, requiredScore }: Props) {
   const targets = getMathStarTargets(requiredScore);
   const earned = targets.filter(target => score >= target).length;
   const nextTarget = targets[earned];
-  const pointsNeeded = (points: number) => `${points} more ${points === 1 ? 'point' : 'points'}`;
+  const max = Math.max(1, targets[2]);
+  const fill = getFillPercent(score, targets, earned);
 
-  return (
-    <div className="max-w-full text-center">
-      <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-slate-700 bg-slate-900/50 px-4 py-2">
-        <div className="whitespace-nowrap text-sm font-bold text-amber-300 md:text-lg">
-          Score: <span className="text-xl tabular-nums text-white md:text-2xl">{score}</span>
-        </div>
-        <ol aria-label="Star score targets" className="flex items-center gap-3 border-l border-slate-600 pl-3 sm:gap-4">
-          {targets.map((target, index) => (
-            <li key={index}
-              aria-label={`${index + 1} ${index === 0 ? 'star' : 'stars'}: ${target} points${score >= target ? ', reached' : ''}`}
-              aria-current={earned === index + 1 ? 'step' : undefined}
-              className={`flex min-w-9 flex-col items-center gap-0.5 ${score >= target ? 'text-amber-300' : 'text-slate-400'}`}>
-              <span aria-hidden="true" className="flex gap-0.5 text-[10px] sm:text-xs">
-                {Array.from({ length: index + 1 }, (_, star) => (
-                  <i key={star} className={`${score >= target ? 'fas' : 'far'} fa-star`} />
-                ))}
-              </span>
-              <span aria-hidden="true" className="text-sm font-semibold tabular-nums">{target}</span>
-            </li>
-          ))}
-        </ol>
-      </div>
-      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-        {earned === 0 ? `${pointsNeeded(requiredScore - score)} to unlock King capture.`
-          : `Finish at this score: ${earned} ${earned === 1 ? 'star' : 'stars'}.`}
-        {earned > 0 && earned < 3 && <span>
-          {pointsNeeded(nextTarget - score)} for {earned + 1} stars. Continue collecting or capture the King to finish.
-        </span>}
-        {earned === 3 && <span>Three-star score reached. Capture the King to finish.</span>}
-      </div>
+  return <div className={styles.scoreRow}>
+    <div className={styles.scoreReadout} aria-hidden="true">
+      <span>Score</span><strong>{score}</strong>
     </div>
-  );
+    <meter className="sr-only" min={0} max={max} value={Math.max(0, Math.min(score, max))}
+      aria-label="Score" aria-valuetext={`${score} points. ${requiredScore} points required to capture the King.`} />
+    <details className={styles.starGroup}>
+      <summary className={styles.stars} aria-label={`Star score targets, ${earned} of 3 reached`}>
+        {targets.map((points, index) => <span key={index} className={styles.milestone} aria-hidden="true">
+          <span className={styles.milestoneArt}>
+            <GameIcon name="score-star-outline" directory="math-tour" width={43.8101} height={315.828} />
+            <GameIcon name={score >= points ? 'score-star-earned' : 'score-star-empty'}
+              directory="math-tour" width={38.0957} height={260.901} />
+          </span>
+        </span>)}
+      </summary>
+      <ol className={styles.starTargets}>
+        {targets.map((points, index) => <li key={index}
+          aria-label={`${index + 1} ${index === 0 ? 'star' : 'stars'}: ${points} points${score >= points ? ', reached' : ''}`}
+          aria-current={earned === index + 1 ? 'step' : undefined}>
+          {index + 1} ★ · {points} points
+        </li>)}
+      </ol>
+    </details>
+    <div className={styles.milestoneTrack} aria-hidden="true">
+      <div className={styles.milestoneFill} style={{ inlineSize: `${fill}%` }} />
+    </div>
+    <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+      {earned === 0 ? `${pointsNeeded(requiredScore - score)} to unlock King capture.`
+        : `Finish at this score: ${earned} ${earned === 1 ? 'star' : 'stars'}.`}
+      {earned > 0 && earned < 3 && <span>
+        {pointsNeeded(nextTarget - score)} for {earned + 1} stars. Continue collecting or capture the King to finish.
+      </span>}
+      {earned === 3 && <span>Three-star score reached. Capture the King to finish.</span>}
+    </div>
+  </div>;
 }

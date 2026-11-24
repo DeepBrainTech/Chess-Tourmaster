@@ -10,21 +10,25 @@ import {
   isKingAccessExhausted,
 } from '@/lib/game/gameReducer';
 import { getFixedLevelConfig, MAX_LEVELS } from '@/lib/game/levelCatalog';
+import { FIRE_LIMIT_MS } from '@/lib/game/rules';
+import { loadGameSettings, saveGameSettings, MAX_MOVE_VOLUME } from '@/lib/game/settings';
 import {
   initSound,
+  setSoundEnabled,
   playMove,
   playVictory,
   playBurn,
   speak,
   cancelSpeak,
 } from '@/lib/sound';
-import PortalButton from './PortalButton';
-import GameHeader, { TilesAndScoreBar } from './GameHeader';
 import Board from './Board';
 import MainModal from './MainModal';
+import HowToPlayDialog from './HowToPlayDialog';
+import GameShopDialog, { UNDO_ITEM_ID } from './GameShopDialog';
+import SettingsDialog from './SettingsDialog';
 import ClassicResultDialog from './ClassicResultDialog';
 import ModesHome from './ModesHome';
-import ClassicTour from './ClassicTour';
+import Tour from './Tour';
 import Leaderboard from './Leaderboard';
 import type { ModeProgress } from './LevelMap';
 import { getPortalApiBase, getPortalUrl } from '@/lib/apiBase';
@@ -38,10 +42,10 @@ type WinData = {
   level: number;
   time: string;
   stars: number;
-  isFinalLevel: boolean;
-  isNewHighScore?: boolean;
-  baseScore?: number;
+  final: boolean;
 };
+
+const SCORCH_DURATION_MS = 420;
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -71,10 +75,6 @@ type PortalAssets = {
   diamonds: number;
   flowers: number;
 };
-type ExchangeType = 'hint' | 'undo';
-const HINT_ITEM_ID = 'chess_tourmaster_hint';
-
-const UNDO_ITEM_ID = 'chess_tourmaster_undo';
 export default function GamePage({ accountId, username, initialPortalAssets, portalLocale }: Props) {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
   const activeMode = useRef(state.gameMode);
@@ -82,6 +82,10 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
     activeMode.current = state.gameMode;
   }, [state.gameMode]);
   const [modalType, setModalType] = useState<ModalType>('mode');
+  const [settings, setSettings] = useState(loadGameSettings);
+  const moveVolume = settings.volume / MAX_MOVE_VOLUME;
+  const victoryVolume = useRef(moveVolume);
+  useLayoutEffect(() => { setSoundEnabled(settings.sound); }, [settings.sound]);
   const [homeOverlay, setHomeOverlay] = useState(false);
   const [mapHelpMode, setMapHelpMode] = useState<GameMode>();
   const [initialMapMode, setInitialMapMode] = useState<GameMode>();
@@ -89,18 +93,15 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
   const [winData, setWinData] = useState<WinData | null>(null);
   const [classicBestTimes, setClassicBestTimes] = useState<Record<number, number>>({});
   const [burned, setBurned] = useState(false);
+  const [fireFrame, setFireFrame] = useState<{ position: string; remainingMs: number } | null>(null);
   const leaderboardButton = useRef<HTMLButtonElement>(null);
   const [localHintCount, setLocalHintCount] = useState(0);
   const [localUndoCount, setLocalUndoCount] = useState(0);
   const [hintLoading, setHintLoading] = useState(false);
   const [undoLoading, setUndoLoading] = useState(false);
-  const [hintConfirmOpen, setHintConfirmOpen] = useState(false);
-  const [hintConfirmLoading, setHintConfirmLoading] = useState(false);
-  const [hintConfirmSubmitting, setHintConfirmSubmitting] = useState(false);
-  const [exchangeType, setExchangeType] = useState<ExchangeType>('hint');
+  const [shopOpen, setShopOpen] = useState(false);
   const [portalAssets, setPortalAssets] = useState<PortalAssets | null>(initialPortalAssets ?? null);
   const assetsRevision = useRef(0);
-  const [hintConfirmError, setHintConfirmError] = useState<string | null>(null);
   const [hintTarget, setHintTarget] = useState<{ r: number; c: number } | null>(null);
   const [message, setMessage] = useState<{ text: string; className: string } | null>(null);
   const [shake, setShake] = useState(false);
@@ -109,7 +110,8 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
   const [starting, setStarting] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
-  const paused = modalType !== 'none' || hintConfirmOpen || hintLoading || undoLoading || starting || hidden;
+  const gameBusy = modalType !== 'none' || hintLoading || undoLoading || starting || hidden;
+  const paused = gameBusy || shopOpen;
   const lastSpokenSecondRef = useRef<number>(4);
   const wonByCaptureRef = useRef(false);
   const portalBase = getPortalApiBase();
@@ -158,24 +160,15 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
 
   const hintCount = localHintCount;
   const undoCount = localUndoCount;
-  const [exchangeCost, setExchangeCost] = useState<Assets | null>(null);
-  const exchangeBusy = useRef(false);
-  const loadExchange = useCallback(async (kind: ExchangeType) => {
-    setExchangeType(kind);
-    setHintConfirmOpen(true);
-    setHintConfirmLoading(true);
-    setHintConfirmError(null);
-    setExchangeCost(null);
-    try {
-      const [assets, catalog] = await Promise.all([portal.accountAssets(), portal.catalog()]);
-      const item = catalog.items[kind === 'undo' ? UNDO_ITEM_ID : HINT_ITEM_ID];
-      if (!item) throw new Error('Item configuration error.');
-      applyPortalAssets(assets);
-      setExchangeCost(item.cost);
-    } catch {
-      setHintConfirmError('Failed to load assets.');
-    } finally { setHintConfirmLoading(false); }
+  const loadShop = useCallback(async (signal: AbortSignal) => {
+    const [assets, catalog] = await Promise.all([portal.accountAssets(signal), portal.catalog(signal)]);
+    if (!signal.aborted) applyPortalAssets(assets);
+    return catalog.items;
   }, [portal, applyPortalAssets]);
+  const buyShopItem = useCallback(async (sku: string) => {
+    const purchase = await buyGameItem(sku);
+    applyPortalAssets(purchase.assets);
+  }, [buyGameItem, applyPortalAssets]);
 
   const loadProgress = useCallback(async (mode: GameMode, applyToGame = true) => {
     if (!accountId) return null;
@@ -188,12 +181,6 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
       const progressData = await progressRes.json();
       const applyProgress = applyToGame && activeMode.current === mode;
       const unlocked = normalizeUnlockedLevel(progressData.data?.total_levels);
-      if (applyProgress && progressData.success && progressData.data?.total_levels != null) {
-        dispatch({
-          type: 'SET_MAX_UNLOCKED_LEVEL',
-          payload: unlocked,
-        });
-      }
       if (applyProgress && progressData.success && typeof progressData.data?.hint_count === 'number') {
         setLocalHintCount(Math.max(0, Math.floor(progressData.data.hint_count)));
       }
@@ -276,11 +263,22 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
   }, [paused, state.isPlaying, state.gameStartTime, starting]);
 
   const onFire = Boolean(state.grid[state.knightPos.r]?.[state.knightPos.c]?.hasFire);
-  useGameClock(state.gameStartTime, state.isPlaying && !paused,
-    `${state.knightPos.r},${state.knightPos.c}`, onFire, (seconds, remaining) => {
+  const position = `${state.knightPos.r},${state.knightPos.c}`;
+  useGameClock(state.gameStartTime, state.isPlaying && !paused, position, onFire,
+    (seconds, remaining) => {
       if (seconds !== state.gameTimeSeconds) dispatch({ type: 'SET_GAME_TIME', payload: seconds });
+      if (onFire && state.isPlaying) {
+        setFireFrame(frame => frame?.position === position && frame.remainingMs === remaining
+          ? frame : { position, remainingMs: remaining });
+      } else if (!onFire) {
+        setFireFrame(null);
+      }
       if (!state.isPlaying || paused) { cancelSpeak(); return; }
-      if (!onFire) { lastSpokenSecondRef.current = 4; return; }
+      if (!onFire) {
+        if (lastSpokenSecondRef.current !== 4) cancelSpeak();
+        lastSpokenSecondRef.current = 4;
+        return;
+      }
       const countdown = Math.ceil(remaining / 1000);
       if (countdown >= 1 && countdown <= 3 && countdown !== lastSpokenSecondRef.current) {
         lastSpokenSecondRef.current = countdown;
@@ -288,18 +286,26 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
       }
       if (remaining <= 0) {
         playBurn();
+        setMessage(null);
         setBurned(true);
-        setModalType('lose');
+        setModalType('scorch');
         dispatch({ type: 'LOSE_LEVEL' });
       }
     });
 
-  // Stuck check after move / no remaining king approach tiles
-  const unwinnable = state.isPlaying && state.grid.length > 0 && (isStuck(state) || isKingAccessExhausted(state));
   useEffect(() => {
+    if (modalType !== 'scorch') return;
+    const timer = window.setTimeout(() => setModalType('lose'), SCORCH_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [modalType]);
+
+  // Stuck check after move / no remaining king approach tiles
+  const unwinnable = state.isPlaying && !onFire && state.grid.length > 0 && (isStuck(state) || isKingAccessExhausted(state));
+  useLayoutEffect(() => {
     if (paused) return;
     if (unwinnable) {
       const t = setTimeout(() => {
+        setMessage(null);
         setBurned(false);
         setModalType('lose');
         dispatch({ type: 'LOSE_LEVEL' });
@@ -320,8 +326,9 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
             state.gameMode === 'math_tour'
               ? `Need ${Math.max(0, state.requiredScore - state.currentScore)} more score!`
               : 'Clear all tiles first!';
-          setMessage({ text, className: 'text-rose-400' });
-          setTimeout(() => setMessage(null), 1500);
+          const notice = { text, className: 'text-rose-400' };
+          setMessage(notice);
+          setTimeout(() => setMessage(current => current === notice ? null : current), 1500);
           setShake(true);
           setTimeout(() => setShake(false), 500);
           return;
@@ -335,7 +342,7 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
         }
         setHintTarget(null);
         dispatch({ type: 'MOVE', payload: { r, c } });
-        playMove();
+        playMove(moveVolume);
         return;
       }
       const dr = Math.abs(state.knightPos.r - r);
@@ -347,13 +354,14 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
       }
       setHintTarget(null);
       dispatch({ type: 'MOVE', payload: { r, c } });
-      playMove();
+      playMove(moveVolume);
       if (state.gameMode === 'math_tour' && tile.hasFire) {
-        setMessage({ text: 'Fire: Score x3!', className: 'text-orange-400' });
-        setTimeout(() => setMessage(null), 1500);
+        const notice = { text: 'Fire: Score x3!', className: 'text-orange-400' };
+        setMessage(notice);
+        setTimeout(() => setMessage(current => current === notice ? null : current), 1500);
       }
     },
-    [state, paused]
+    [state, paused, moveVolume]
   );
 
   const handleWin = useCallback(async () => {
@@ -365,7 +373,6 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
       await session.current.transition('pause');
       const saved = await session.current.finish(state.history.map(entry => entry.prevPos));
       updateInventoryCounts(saved);
-      dispatch({ type: 'SET_MAX_UNLOCKED_LEVEL', payload: saved.total_levels });
       dispatch({ type: 'UPSERT_LEVEL_STAR', payload: { level: state.level, stars: saved.stars } });
       setModeProgress(previous => ({
         ...previous,
@@ -376,7 +383,7 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
       }));
       dispatch({ type: 'WIN_LEVEL' });
       setWinData({ level: state.level, time: formatTime(saved.time_seconds), stars: saved.stars,
-        isFinalLevel: state.level >= MAX_LEVELS });
+        final: state.level >= MAX_LEVELS });
       if (state.gameMode === 'classic') {
         setClassicBestTimes(previous => ({
           ...previous,
@@ -384,7 +391,8 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
         }));
       }
       setHintTarget(null);
-      playVictory();
+      setMessage(null);
+      playVictory(victoryVolume.current);
       setModalType('win');
     } catch {
       setSaveFailed(true);
@@ -409,6 +417,7 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
       operationBusy.current = true;
       setStarting(true);
       setSaveFailed(false);
+      setMessage(null);
       initSound();
       try {
         const unlocked = requestedLevel ?? (await loadProgress(mode, false))?.total_levels;
@@ -421,6 +430,9 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
           dispatch({ type: 'SET_MODE', payload: mode });
         }
         wonByCaptureRef.current = false;
+        lastSpokenSecondRef.current = 4;
+        setBurned(false);
+        setFireFrame(null);
         dispatch({ type: 'SET_SAVED_CONFIG', payload: config });
         dispatch({ type: 'START_LEVEL', payload: config });
         setHintTarget(null);
@@ -456,7 +468,7 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
   }, [state.level, startLevel, saveFailed]);
 
   const undoMove = useCallback(async () => {
-    if (!accountId || paused || operationBusy.current || state.history.length === 0 || !state.isPlaying) return;
+    if (!accountId || paused || operationBusy.current || !state.isPlaying) return;
     if (undoCount <= 0) {
       if (!portalBase) {
         setMessage({
@@ -466,9 +478,10 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
         setTimeout(() => setMessage(null), 1800);
         return;
       }
-      await loadExchange('undo');
+      setShopOpen(true);
       return;
     }
+    if (state.history.length === 0) return;
     setUndoLoading(true);
     operationBusy.current = true;
     try {
@@ -479,6 +492,7 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
         });
         const data = await response.json().catch(() => null);
         if (typeof data?.data?.undo_count === 'number') setLocalUndoCount(data.data.undo_count);
+        if (data?.code === 'NO_UNDO_LEFT' && portalBase) setShopOpen(true);
         return response.ok && data?.success === true;
       });
       if (!used) return;
@@ -495,25 +509,7 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
       operationBusy.current = false;
       setUndoLoading(false);
     }
-  }, [paused, portalBase, state.history.length, state.isPlaying, accountId, undoCount, loadExchange, consumeGameItem]);
-
-  const setMode = useCallback((mode: 'classic' | 'math_tour') => {
-    if (operationBusy.current) return;
-    dispatch({ type: 'SET_MODE', payload: mode });
-    setHintTarget(null);
-    setModalType('welcome');
-  }, []);
-
-  const handleSelectLevel = useCallback(
-    (selectedLevel: number) => {
-      if (operationBusy.current || saveFailed) return;
-      const level = Math.max(1, Math.min(MAX_LEVELS, Math.floor(selectedLevel)));
-      if (level > state.maxUnlockedLevel || level === state.level) return;
-      dispatch({ type: 'SET_SAVED_CONFIG', payload: null });
-      startLevel(level, false);
-    },
-    [state.level, state.maxUnlockedLevel, startLevel, saveFailed]
-  );
+  }, [paused, portalBase, state.history.length, state.isPlaying, accountId, undoCount, consumeGameItem]);
 
   const executeHint = useCallback(async (): Promise<'used' | 'need_exchange' | 'failed'> => {
     if (!accountId || !state.isPlaying || paused || operationBusy.current) return 'failed';
@@ -543,43 +539,16 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
     }
   }, [paused, state, accountId]);
 
-  const openHintExchangeDialog = useCallback(() => loadExchange('hint'), [loadExchange]);
-
   const handleHint = useCallback(async () => {
     if (!accountId || !state.isPlaying || paused || operationBusy.current) return;
-    const result = await executeHint();
-    if (result === 'need_exchange') {
-      if (!portalBase) {
-        setMessage({
-          text: 'No hints left.',
-          className: 'text-amber-300',
-        });
-        setTimeout(() => setMessage(null), 1800);
-        return;
-      }
-      setExchangeType('hint');
-      await openHintExchangeDialog();
-      return;
+    if (hintCount > 0 && await executeHint() !== 'need_exchange') return;
+    if (portalBase) {
+      setShopOpen(true);
+    } else {
+      setMessage({ text: 'No hints left.', className: 'text-amber-300' });
+      setTimeout(() => setMessage(null), 1800);
     }
-
-  }, [executeHint, paused, openHintExchangeDialog, portalBase, state.isPlaying, accountId]);
-
-  const confirmHintExchange = useCallback(async () => {
-    if (exchangeBusy.current || hintConfirmSubmitting || hintConfirmLoading || !exchangeCost || !accountId) return;
-    exchangeBusy.current = true;
-    setHintConfirmSubmitting(true);
-    setHintConfirmError(null);
-    try {
-      const result = await buyGameItem(exchangeType === 'undo' ? UNDO_ITEM_ID : HINT_ITEM_ID);
-      applyPortalAssets(result.assets);
-      setHintConfirmOpen(false);
-    } catch (error) {
-      setHintConfirmError(error instanceof Error ? error.message : 'Exchange failed.');
-    } finally {
-      exchangeBusy.current = false;
-      setHintConfirmSubmitting(false);
-    }
-  }, [applyPortalAssets, buyGameItem, exchangeType, exchangeCost, hintConfirmLoading, hintConfirmSubmitting, accountId]);
+  }, [executeHint, hintCount, paused, portalBase, state.isPlaying, accountId]);
 
   if (modalType === 'leaderboard') {
     return <Leaderboard accountId={accountId} initialMode={state.gameMode} onHome={() => {
@@ -590,14 +559,19 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
   }
 
   const isHomeView = modalType === 'mode' || homeOverlay;
-  const isClassicGame = !isHomeView && modalType !== 'welcome' && state.gameMode === 'classic' && state.grid.length > 0;
-  const classicResult = isClassicGame && modalType === 'win' && winData ? {
-    type: 'win' as const,
-    stars: winData.stars,
-    time: winData.time,
-    bestTime: classicBestTimes[winData.level] === undefined ? winData.time : formatTime(classicBestTimes[winData.level]),
-    final: winData.isFinalLevel,
-  } : isClassicGame && modalType === 'lose' ? { type: 'lose' as const, burned } : null;
+  const fireRemaining = fireFrame?.position === position ? fireFrame.remainingMs : FIRE_LIMIT_MS;
+  const fire = onFire ? { progress: burned ? 1 : 1 - fireRemaining / FIRE_LIMIT_MS, charred: burned, paused } : undefined;
+  const tour = state.gameMode === 'math_tour' ? {
+    mode: state.gameMode, score: state.currentScore, requiredScore: state.requiredScore, history: state.history,
+  } : { mode: state.gameMode };
+  const win = modalType === 'win' ? winData : null;
+  const result = win ? (tour.mode === 'math_tour' ? {
+    ...win, type: 'math-win' as const, score: tour.score, requiredScore: tour.requiredScore,
+    history: tour.history, tilesLeft: state.tilesLeft,
+  } : {
+    ...win, type: 'win' as const,
+    bestTime: classicBestTimes[win.level] === undefined ? win.time : formatTime(classicBestTimes[win.level]),
+  }) : modalType === 'lose' ? { type: 'lose' as const, burned } : null;
   const backHome = (mapMode?: GameMode) => {
     if (operationBusy.current || saveFailed) return;
     setMessage(null);
@@ -606,11 +580,19 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
     setModalType('mode');
     window.scrollTo(0, 0);
   };
+  const openHomeOverlay = (type: 'help' | 'settings', mode?: GameMode) => {
+    if (operationBusy.current) return;
+    setMapHelpMode(mode);
+    setHomeOverlay(true);
+    setModalType(type);
+  };
+  const closeOverlay = () => {
+    setModalType(homeOverlay ? 'mode' : 'none');
+    setHomeOverlay(false);
+  };
 
   return (
-    <div
-      className={isHomeView || isClassicGame ? `relative min-h-[100dvh] ${isClassicGame ? state.theme : ''}` : `game-root min-h-[100dvh] w-screen flex flex-col items-center justify-start md:justify-center relative overflow-hidden ${state.theme}`}
-    >
+    <div className={`relative min-h-[100dvh] ${isHomeView ? '' : state.theme}`} inert={modalType === 'scorch' || undefined}>
       {isHomeView ? <ModesHome
         username={username}
         coins={portalAssets?.coins}
@@ -622,138 +604,52 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
         busy={starting}
         leaderboardButtonRef={leaderboardButton}
         onPlay={(mode, level) => {
-          if (mode === 'classic' || level !== undefined) {
-            void startLevel(level ?? modeProgress[mode]?.unlocked, false, mode);
-          } else {
-            setMode(mode);
-          }
+          void startLevel(level ?? modeProgress[mode]?.unlocked, false, mode);
         }}
         onLeaderboard={() => {
           setModalType('leaderboard');
           window.scrollTo(0, 0);
         }}
-        onHelp={(mode) => { setMapHelpMode(mode); setHomeOverlay(true); setModalType('help'); }}
-        onSettings={() => { setHomeOverlay(true); setModalType('settings'); }}
-      /> : isClassicGame ? <ClassicTour
+        onMapHelp={(mode) => openHomeOverlay('help', mode)}
+        onSettings={(mode) => openHomeOverlay('settings', mode)}
+      /> : <Tour
+        {...tour}
         level={state.level}
         tilesLeft={state.tilesLeft}
-        time={formatTime(state.gameTimeSeconds)}
+        time={settings.showTimer ? formatTime(state.gameTimeSeconds) : undefined}
         username={username}
         coins={portalAssets?.coins}
         shopUrl={getPortalUrl('shop', portalLocale)}
         themed={state.theme !== initialGameState.theme}
-        busy={paused}
-        canUndo={state.history.length > 0 && state.isPlaying}
+        busy={gameBusy}
+        canUndo={state.isPlaying && (state.history.length > 0 || undoCount === 0)}
         canHint={state.isPlaying}
         undoCount={undoCount}
         hintCount={hintCount}
         hintTarget={hintTarget}
         onHome={() => backHome()}
-        onMap={() => backHome('classic')}
+        onMap={() => backHome(state.gameMode)}
         onSettings={() => setModalType('settings')}
         onHelp={() => setModalType('help')}
         onRestart={restartLevel}
         onUndo={undoMove}
         onHint={handleHint}
       >
-        <Board state={state} onMove={handleMove} shake={shake} hintTarget={hintTarget} locked={paused} />
-      </ClassicTour> : <PortalButton
-        portalLocale={portalLocale}
-        isHomeView={isHomeView}
-        onBackHome={() => backHome()}
-      />}
+        <Board state={state} onMove={handleMove} shake={shake} hintTarget={hintTarget} locked={paused}
+          showNextMoves={settings.showNextMoves} fire={fire} />
+      </Tour>}
 
-      {!isHomeView && !isClassicGame && <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-        <div className="theme-blob w-96 h-96 bg-cyan-500 top-0 left-0" />
-        <div className="theme-blob w-96 h-96 bg-purple-500 bottom-0 right-0 animation-delay-2000" />
-      </div>}
+      {modalType === 'none' && shopOpen && <GameShopDialog assets={portalAssets} hints={hintCount} undos={undoCount}
+        load={loadShop} buy={buyShopItem} onClose={() => setShopOpen(false)} />}
 
-      {modalType === 'none' && (
-        <>
-          {!isClassicGame && <>
-          <GameHeader
-            gameMode={state.gameMode}
-            level={state.level}
-            maxUnlockedLevel={state.maxUnlockedLevel}
-            levelStars={state.levelStars}
-            username={username}
-            onSelectLevel={handleSelectLevel}
-            onRestart={restartLevel}
-            onUndo={undoMove}
-            canUndo={state.history.length > 0 && state.isPlaying}
-            undoCount={undoCount}
-            undoLoading={undoLoading}
-            onHint={handleHint}
-            hintCount={hintCount}
-            hintLoading={hintLoading}
-            onSettings={() => setModalType('settings')}
-            onHelp={() => setModalType('help')}
-          />
-          <TilesAndScoreBar
-            tilesLeft={state.tilesLeft}
-            gameTimeSeconds={state.gameTimeSeconds}
-            gameMode={state.gameMode}
-            currentScore={state.currentScore}
-            requiredScore={state.requiredScore}
-            history={state.history}
-          />
-          <Board state={state} onMove={handleMove} shake={shake} hintTarget={hintTarget} locked={paused} />
-          </>}
-          {hintConfirmOpen && (
-            <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 px-4">
-              <div className="w-full max-w-md rounded-2xl border border-slate-600 bg-slate-900/95 p-5 text-white shadow-2xl">
-                <h3 className="text-xl font-bold mb-2">{exchangeType === 'undo' ? 'Use Undo' : 'Use Hint'}</h3>
-                <p className="text-slate-300 mb-3">Cost: {exchangeCost ? Object.entries(exchangeCost).filter(([, value]) => value > 0).map(([asset, value]) => String(value) + ' ' + asset).join(', ') : '—'}</p>
-                {hintConfirmLoading ? (
-                  <p className="text-slate-300">Loading assets...</p>
-                ) : (
-                  <div className="space-y-1 text-sm text-slate-200 mb-3">
-                    <p>Coins: {portalAssets?.coins ?? '-'}</p>
-                    <p>Diamonds: {portalAssets?.diamonds ?? '-'}</p>
-                    <p>Flowers: {portalAssets?.flowers ?? '-'}</p>
-                  </div>
-                )}
-                {hintConfirmError && <p className="text-rose-300 text-sm mb-3">{hintConfirmError}</p>}
-                <div className="mt-4 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    disabled={hintConfirmSubmitting}
-                    onClick={() => setHintConfirmOpen(false)}
-                    className="px-4 py-2 rounded-lg border border-slate-500 bg-slate-700/80 hover:bg-slate-600"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={confirmHintExchange}
-                    disabled={hintConfirmLoading || hintConfirmSubmitting || !exchangeCost}
-                    className="px-4 py-2 rounded-lg border border-amber-500 bg-amber-700/80 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {hintConfirmSubmitting ? 'Processing...' : 'Confirm'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {!isHomeView && !isClassicGame && <div className="z-10 mt-4 text-center text-gray-400 text-xs">
-        <p>
-          Goal:{' '}
-          {state.gameMode === 'math_tour'
-            ? 'Collect score → Capture '
-            : 'Clear board → Capture '}
-          <span className="text-rose-500 font-bold">King</span>
-        </p>
-      </div>}
-
-      {starting && !classicResult && <div role="status" className="fixed top-4 z-[80] rounded-lg bg-slate-900 px-4 py-2 text-white">Connecting…</div>}
-      {message && !saveFailed && !classicResult && (
-        <div role="status" className={`fixed bottom-6 z-[80] max-w-lg rounded-lg bg-slate-900 px-4 py-3 text-center text-sm pointer-events-none ${message.className}`}>
-          {message.text}
-        </div>
-      )}
+      {starting && !result && <div className="fixed left-1/2 top-4 z-[80] -translate-x-1/2 rounded-lg bg-slate-900 px-4 py-2 text-white">Connecting…</div>}
+      <div role="status">
+        {message && !saveFailed && !result && (
+          <div className={`fixed bottom-6 left-1/2 z-[80] w-max max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-lg bg-slate-900 px-4 py-3 text-center text-sm pointer-events-none ${message.className}`}>
+            {message.text}
+          </div>
+        )}
+      </div>
       {saveFailed && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-6">
           <div role="alert" className="rounded-xl bg-slate-900 border border-slate-600 p-6 text-center text-white">
@@ -763,30 +659,32 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
           </div>
         </div>
       )}
-      {classicResult ? <ClassicResultDialog
-        result={classicResult}
+      {result ? <ClassicResultDialog
+        result={result}
         busy={starting}
         error={message?.text}
         onDismiss={() => { setMessage(null); setModalType('none'); }}
         onRestart={restartLevel}
         onNextLevel={nextLevel}
-        onMap={() => backHome('classic')}
+        onMap={() => backHome(state.gameMode)}
         onHome={() => backHome()}
-      /> : <MainModal
-        busy={starting}
-        type={modalType === 'mode' ? 'none' : modalType}
-        gameMode={modalType === 'help' && homeOverlay ? mapHelpMode ?? state.gameMode : state.gameMode}
-        startLevel={state.maxUnlockedLevel}
-        winData={winData}
-        onStartLevel={() => startLevel(state.maxUnlockedLevel, false)}
-        onNextLevel={nextLevel}
-        onRetry={restartLevel}
-        onCloseOverlay={() => {
-          setModalType(homeOverlay ? 'mode' : 'none');
-          setHomeOverlay(false);
+      /> : modalType === 'settings' ? <SettingsDialog
+        settings={settings}
+        onSave={next => {
+          victoryVolume.current = next.volume / MAX_MOVE_VOLUME;
+          setSettings(next);
+          saveGameSettings(next);
         }}
-        onSetTheme={(name) => dispatch({ type: 'SET_THEME', payload: name })}
-      />}
+        onClose={closeOverlay}
+        onRules={() => setModalType('rules')}
+      /> : modalType === 'rules' ? <HowToPlayDialog
+        initialMode={homeOverlay ? mapHelpMode : state.gameMode}
+        onClose={closeOverlay}
+      /> : modalType === 'help' && (homeOverlay ? <MainModal
+        busy={starting}
+        gameMode={mapHelpMode ?? state.gameMode}
+        onCloseOverlay={closeOverlay}
+      /> : <HowToPlayDialog gameMode={state.gameMode} onClose={closeOverlay} />)}
     </div>
   );
 }

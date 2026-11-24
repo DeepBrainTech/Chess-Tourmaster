@@ -1,0 +1,156 @@
+.dialog.dialog {
+  --u: clamp(.55px, min(calc((100dvw - 24px) / 1499), calc((100dvh - 24px) / 826)), 1px);
+  --inset: #131a3d;
+  --gloss: #ffffff73;
+  --shade: #0b10304f;
+  inline-size: min(calc(100dvw - 24px), calc(1499 * var(--u)));
+  padding: calc(48 * var(--u)) calc(44 * var(--u)) calc(16 * var(--u));
+  scroll-padding-block: 12px;
+  color-scheme: dark;
+}
+
+.dialog .panel { gap: calc(32 * var(--u)); padding: calc(80 * var(--u)) calc(80 * var(--u)) calc(40 * var(--u)); }
+.dialog .title {
+  inset-block-start: calc(-52 * var(--u));
+  translate: -50% 0;
+  box-shadow: inset 0 calc(-6 * var(--u)) var(--shade), inset 0 calc(3 * var(--u)) var(--gloss);
+  background: #ffc83d;
+  text-shadow: calc(3 * var(--u)) calc(6 * var(--u)) black;
+}
+.dialog .close { inset-block-start: calc(-43 * var(--u)); inset-inline-end: calc(-43 * var(--u)); }
+
+.section { display: grid; gap: calc(12 * var(--u)); min-inline-size: 0; }
+.section h2 {
+  color: #9fb0f5;
+  font-family: inherit;
+  font-size: max(.875rem, calc(24 * var(--u)));
+  text-transform: uppercase;
+}
+
+.singles, .packs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(21 * var(--u));
+  margin-inline: calc(7 * var(--u));
+}
+.packs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(40 * var(--u)); margin: 0; }
+.single, .pack {
+  border: max(2px, calc(5 * var(--u))) solid var(--outline);
+  border-radius: calc(30 * var(--u));
+  background: var(--inset);
+}
+.single {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(24 * var(--u));
+  min-block-size: calc(106 * var(--u));
+  padding: calc(12 * var(--u)) calc(40 * var(--u)) calc(12 * var(--u)) calc(12 * var(--u));
+}
+.pack {
+  position: relative;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: calc(18 * var(--u));
+  min-block-size: calc(400 * var(--u));
+  padding: calc(30 * var(--u)) calc(20 * var(--u)) calc(20 * var(--u));
+  text-align: center;
+}
+.pack[data-kind='utility'] { background: linear-gradient(#6e2fcc, #1b2452 67.308%, var(--inset)); }
+.pack .copy { margin-block-start: calc(4 * var(--u)); }
+
+.copy { display: grid; gap: calc(4 * var(--u)); }
+.copy h3 { font-size: max(1rem, calc(32 * var(--u))); text-shadow: calc(1.53 * var(--u)) calc(3.06 * var(--u)) black; }
+.copy p { color: #c9d2ff; font-size: max(.875rem, calc(24 * var(--u))); }
+
+.itemIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: calc(72 * var(--u));
+  block-size: calc(74 * var(--u));
+  border: max(1px, calc(2 * var(--u))) solid var(--outline);
+  border-radius: calc(17.5 * var(--u));
+  background: #ffc83d;
+  box-shadow: inset 0 calc(-5.25 * var(--u)) var(--shade), inset 0 calc(3.5 * var(--u)) var(--gloss);
+}
+.itemIcon[data-kind='undo'] { background: #2fa8ff; }
+.itemIcon[data-small='true'] {
+  inline-size: calc(52 * var(--u));
+  block-size: calc(54 * var(--u));
+  border-radius: calc(12.5 * var(--u));
+  box-shadow: inset 0 calc(-3.75 * var(--u)) var(--shade), inset 0 calc(2.5 * var(--u)) var(--gloss);
+}
+.fan { display: flex; justify-content: center; align-items: center; min-block-size: calc(86 * var(--u)); }
+.fan > span + span { margin-inline-start: calc(-12 * var(--u)); }
+.fan > span:first-child { rotate: -10deg; translate: 0 calc(5 * var(--u)); }
+.fan > span:last-child { rotate: 10deg; translate: 0 calc(5 * var(--u)); }
+.utilityArt .fan { min-block-size: calc(60 * var(--u)); }
+.utilityArt .fan > span + span { margin-inline-start: calc(-17 * var(--u)); }
+.utilityUndos { position: relative; margin-block-start: calc(-18 * var(--u)); }
+.utilityUndos > span:nth-child(2) { rotate: -8deg; }
+.utilityUndos > span:nth-child(4) { rotate: 8deg; }
+.utilityUndos > span:nth-child(3) { z-index: 1; }
+
+.packPrices { display: grid; gap: calc(12 * var(--u)); justify-items: center; min-inline-size: 0; }
+.original { display: flex; align-items: center; gap: calc(4 * var(--u)); color: #7c86b8; font-size: max(.75rem, calc(20 * var(--u))); }
+.dialog .buy {
+  flex-wrap: wrap;
+  gap: calc(8 * var(--u));
+  max-inline-size: 100%;
+  padding: calc(10 * var(--u)) calc(24 * var(--u)) calc(10 * var(--u)) calc(14 * var(--u));
+  background: #5bd63a;
+  font-size: max(1rem, calc(36 * var(--u)));
+}
+.dialog .buy:disabled { opacity: 1; background: #616876; filter: grayscale(1); cursor: not-allowed; }
+.price { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: calc(8 * var(--u)); }
+.price small { font-size: .52em; }
+.coin { display: grid; place-items: center; inline-size: calc(41.806 * var(--u)); block-size: calc(44.111 * var(--u)); }
+
+.buy, .best, .discount {
+  paint-order: stroke fill;
+  -webkit-text-stroke: calc(4 * var(--u)) var(--outline);
+  text-shadow: calc(2 * var(--u)) calc(4 * var(--u)) var(--outline);
+}
+.best, .discount {
+  position: absolute;
+  inset-block-start: calc(-20 * var(--u));
+  display: inline-flex;
+  align-items: center;
+  border: max(1px, calc(3 * var(--u))) solid var(--outline);
+  box-shadow: inset 0 calc(-4 * var(--u)) var(--shade), inset 0 calc(2 * var(--u)) var(--gloss);
+  font-size: max(.75rem, calc(24 * var(--u)));
+  white-space: nowrap;
+}
+.best {
+  padding: calc(2 * var(--u)) calc(16 * var(--u)) calc(6 * var(--u));
+  border-radius: calc(13 * var(--u));
+  background: #ffc83d;
+  text-transform: uppercase;
+}
+.discount {
+  inset-inline-end: calc(-19 * var(--u));
+  inset-block-start: calc(-13 * var(--u));
+  gap: calc(2 * var(--u));
+  padding: calc(4 * var(--u)) calc(6 * var(--u));
+  border-radius: 999px;
+  background: #ff4d5e;
+  rotate: 12deg;
+}
+.status { text-align: center; color: #c9d2ff; font-size: max(.875rem, calc(24 * var(--u))); }
+
+@media (max-width: 860px) {
+  .dialog.dialog { padding: 28px 12px 12px; }
+  .dialog .panel { padding: 40px 16px 24px; }
+  .dialog .close { inset-inline-end: -8px; }
+  .singles { margin: 0; }
+  .single { gap: 8px; padding: 8px; }
+  .discount { inset-inline-end: -3px; }
+}
+
+@media (max-width: 540px) {
+  .singles, .packs { grid-template-columns: minmax(0, 1fr); }
+  .packs { gap: 22px; }
+  .pack { min-block-size: auto; padding: 18px 12px; }
+}

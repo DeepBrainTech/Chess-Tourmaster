@@ -1,0 +1,42 @@
+.effect {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.fill, .ash { position: absolute; inset: 0; }
+
+.fill {
+  transform: translateY(calc((1 - var(--fire-progress)) * 100%));
+  background:
+    radial-gradient(ellipse at 24% 0%, #fff2ae 0%, transparent 33%),
+    radial-gradient(ellipse at 77% 0%, #fff2ae 0%, transparent 30%),
+    linear-gradient(#ffd765, #ffc83d 26%, #ff972f 72%, #ff6938);
+  box-shadow: inset 0 max(2px, calc(5 * var(--u))) #ffffff80,
+    inset 0 calc(-8 * var(--u)) #0b10304f;
+}
+
+.ash {
+  opacity: 0;
+  background:
+    radial-gradient(circle at 20% 74%, #ffad4c 0 1.5%, transparent 2.5%),
+    radial-gradient(circle at 78% 57%, #ffad4c 0 1%, transparent 2%),
+    radial-gradient(circle at 83% 83%, #ff8652 0 1.5%, transparent 2.5%),
+    radial-gradient(ellipse at 50% 96%, #aa4938, transparent 70%),
+    linear-gradient(#50313a, #251f31);
+  box-shadow: inset 0 max(2px, calc(4 * var(--u))) #ffb85b50,
+    inset 0 calc(-8 * var(--u)) #171429;
+}
+
+.effect[data-fire-stage='charred'] .ash { opacity: 1; }
+
+.effect[data-fire-stage='charred'] ~ img,
+.effect[data-fire-stage='charred'] ~ span img {
+  filter: grayscale(1) sepia(.4) brightness(.36) drop-shadow(0 0 max(1px, calc(2 * var(--u))) #ffb159);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .effect[data-fire-stage='heating'][data-fire-paused='false'] .fill { transition: transform 100ms linear; }
+  .effect[data-fire-stage='charred'] .ash { transition: opacity 210ms ease-out 60ms; }
+}
