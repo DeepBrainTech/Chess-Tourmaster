@@ -38,6 +38,7 @@ function getFillPercent(score: number, targets: number[], earned: number) {
 
 export default function MathStarProgress({ score, requiredScore }: Props) {
   const targets = getMathStarTargets(requiredScore);
+  const [oneStarTarget] = targets;
   const earned = targets.filter(target => score >= target).length;
   const nextTarget = targets[earned];
   const max = Math.max(1, targets[2]);
@@ -48,7 +49,7 @@ export default function MathStarProgress({ score, requiredScore }: Props) {
       <span>Score</span><strong>{score}</strong>
     </div>
     <meter className="sr-only" min={0} max={max} value={Math.max(0, Math.min(score, max))}
-      aria-label="Score" aria-valuetext={`${score} points. ${requiredScore} points required to capture the King.`} />
+      aria-label="Score" aria-valuetext={`${score} points. ${oneStarTarget} points required to capture the King.`} />
     <details className={styles.starGroup}>
       <summary className={styles.stars} aria-label={`Star score targets, ${earned} of 3 reached`}>
         {targets.map((points, index) => <span key={index} className={styles.milestone} aria-hidden="true">
@@ -71,7 +72,7 @@ export default function MathStarProgress({ score, requiredScore }: Props) {
       <div className={styles.milestoneFill} style={{ inlineSize: `${fill}%` }} />
     </div>
     <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-      {earned === 0 ? `${pointsNeeded(requiredScore - score)} to unlock King capture.`
+      {earned === 0 ? `${pointsNeeded(oneStarTarget - score)} to unlock King capture.`
         : `Finish at this score: ${earned} ${earned === 1 ? 'star' : 'stars'}.`}
       {earned > 0 && earned < 3 && <span>
         {pointsNeeded(nextTarget - score)} for {earned + 1} stars. Continue collecting or capture the King to finish.

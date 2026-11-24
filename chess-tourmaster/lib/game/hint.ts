@@ -1,6 +1,7 @@
 import type { GameState, Position } from './types';
 import { gameReducer, isValidMove } from './gameReducer';
 import { getValidMoves, samePosition } from './moves';
+import { getMathStarTargets } from './rules';
 
 export type HintResult = { type: 'next_move'; move: Position }
   | { type: 'no_win_path' } | { type: 'search_exhausted' };
@@ -12,7 +13,7 @@ const countBits = (mask: bigint): number => {
 };
 
 // Validate the entire suffix against the current board, including off-route moves/undos.
-function certifiedSuffix(state: GameState): Position[] | null {
+function certifiedFinish(state: GameState): { move: Position; score: number } | null {
   if (!state.solution) return null;
   const index = state.solution.findIndex(p => samePosition(p, state.knightPos));
   const suffix = state.solution.slice(index + 1);
@@ -21,16 +22,25 @@ function certifiedSuffix(state: GameState): Position[] | null {
     if (!isValidMove(next, p.r, p.c)) return null;
     next = gameReducer(next, { type: 'MOVE', payload: p });
   }
-  return samePosition(next.knightPos, next.kingPos) && !next.isPlaying ? suffix : null;
+  return suffix.length && samePosition(next.knightPos, next.kingPos) && !next.isPlaying
+    ? { move: suffix[0], score: next.currentScore } : null;
 }
 
 export function getHintMove(state: GameState, nodeBudget = 150000): HintResult {
   if (!state.isPlaying || !state.grid.length) return { type: 'no_win_path' };
-  for (const move of getValidMoves(state.knightPos.r, state.knightPos.c, state.gridSizeVal)) {
-    if (samePosition(move, state.kingPos) && isValidMove(state, move.r, move.c)) return { type: 'next_move', move };
+  const math = state.gameMode === 'math_tour';
+  const [oneStarTarget, , threeStarTarget] = getMathStarTargets(state.requiredScore);
+  let best: { move: Position; score: number } | null = null;
+  if (isValidMove(state, state.kingPos.r, state.kingPos.c)) {
+    const move = state.kingPos;
+    if (!math || state.currentScore >= threeStarTarget) return { type: 'next_move', move };
+    best = { move, score: state.currentScore };
   }
-  const suffix = certifiedSuffix(state);
-  if (suffix?.length) return { type: 'next_move', move: suffix[0] };
+  const certified = certifiedFinish(state);
+  if (certified) {
+    if (!math || certified.score >= threeStarTarget) return { type: 'next_move', move: certified.move };
+    if (!best || certified.score > best.score) best = certified;
+  }
 
   const tiles = state.grid.flat().filter(t => t.type !== 'void' && (!t.visited || samePosition(t, state.knightPos)));
   const index = new Map(tiles.map((t, i) => [`${t.r},${t.c}`, i]));
@@ -41,16 +51,20 @@ export function getHintMove(state: GameState, nodeBudget = 150000): HintResult {
   const start = index.get(`${state.knightPos.r},${state.knightPos.c}`)!;
   const end = index.get(`${state.kingPos.r},${state.kingPos.c}`)!;
   const all = (1n << BigInt(tiles.length)) - 1n;
-  const math = state.gameMode === 'math_tour';
-  const failed = new Map<string, number>();
+  const explored = new Map<string, number>();
   let exhausted = false;
 
-  function search(current: number, remaining: bigint, score: number): number[] | null {
-    if (--nodeBudget < 0) { exhausted = true; return null; }
-    if ((masks[current] & bits[end]) && (math ? score >= state.requiredScore : remaining === bits[end])) return [end];
+  function search(current: number, remaining: bigint, score: number, first?: Position): boolean {
+    if (--nodeBudget < 0) { exhausted = true; return false; }
+    if ((masks[current] & bits[end]) && (math ? score >= oneStarTarget : remaining === bits[end])) {
+      if (!best || score > best.score) best = { move: first ?? state.kingPos, score };
+      if (!math || score >= threeStarTarget) return true;
+    }
     const key = `${current}:${remaining}`;
-    const previous = failed.get(key);
-    if (previous !== undefined && (!math || previous >= score)) return null;
+    const previous = explored.get(key);
+    // Every score operation is monotone, so a lower score cannot improve the same continuation.
+    if (previous !== undefined && previous >= score) return false;
+    explored.set(key, score);
     let seen = bits[current];
     const queue = [current];
     for (let head = 0; head < queue.length; head++) {
@@ -58,26 +72,35 @@ export function getHintMove(state: GameState, nodeBudget = 150000): HintResult {
         if (v !== end && (remaining & bits[v]) && !(seen & bits[v])) { seen |= bits[v]; queue.push(v); }
       }
     }
-    if (!(seen & masks[end])) return null;
-    if (!math) {
-      if (((seen | bits[end]) & remaining) !== remaining) return null;
+    if (!(seen & masks[end])) return false;
+    if (math) {
+      // Relax movement order by collecting all reachable positive points before every multiplier.
+      let points = score;
+      let multiplier = 1;
+      for (let i = 1; i < queue.length; i++) {
+        const tile = tiles[queue[i]];
+        if ((tile.tileMultiplier ?? 1) > 1) multiplier *= tile.tileMultiplier!;
+        else points += Math.max(0, tile.value) * (first ? 1 : Math.max(1, state.scoreMultiplier));
+      }
+      const upperBound = Math.max(0, points) * multiplier;
+      if (upperBound < oneStarTarget || (best && upperBound <= best.score)) return false;
+    } else {
+      if (((seen | bits[end]) & remaining) !== remaining) return false;
       for (let v = 0; v < tiles.length; v++) {
-        if ((remaining & bits[v]) && countBits(masks[v] & (remaining | bits[current])) < (v === end ? 1 : 2)) return null;
+        if ((remaining & bits[v]) && countBits(masks[v] & (remaining | bits[current])) < (v === end ? 1 : 2)) return false;
       }
     }
     const candidates = adjacent[current].filter(v => v !== end && Boolean(remaining & bits[v]));
     const nextScore = (v: number) => (tiles[v].tileMultiplier ?? 1) > 1
-      ? score * tiles[v].tileMultiplier! : score + tiles[v].value * state.scoreMultiplier;
+      ? score * tiles[v].tileMultiplier! : score + tiles[v].value * (first ? 1 : state.scoreMultiplier);
     candidates.sort((a, b) => math ? nextScore(b) - nextScore(a) : countBits(masks[a] & remaining) - countBits(masks[b] & remaining));
     for (const v of candidates) {
-      const path = search(v, remaining & ~bits[v], math ? nextScore(v) : 0);
-      if (path) return [v, ...path];
-      if (exhausted) return null;
+      const move = first ?? { r: tiles[v].r, c: tiles[v].c };
+      if (search(v, remaining & ~bits[v], math ? nextScore(v) : 0, move)) return true;
+      if (exhausted) return false;
     }
-    failed.set(key, score);
-    return null;
+    return false;
   }
-  const path = search(start, all & ~bits[start], state.currentScore);
-  if (!path) return { type: exhausted ? 'search_exhausted' : 'no_win_path' };
-  return { type: 'next_move', move: { r: tiles[path[0]].r, c: tiles[path[0]].c } };
+  search(start, all & ~bits[start], state.currentScore);
+  return best ? { type: 'next_move', move: best.move } : { type: exhausted ? 'search_exhausted' : 'no_win_path' };
 }

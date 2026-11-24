@@ -10,7 +10,7 @@ import {
   isKingAccessExhausted,
 } from '@/lib/game/gameReducer';
 import { getFixedLevelConfig, MAX_LEVELS } from '@/lib/game/levelCatalog';
-import { FIRE_LIMIT_MS } from '@/lib/game/rules';
+import { FIRE_LIMIT_MS, getMathStarTargets } from '@/lib/game/rules';
 import { loadGameSettings, saveGameSettings, MAX_MOVE_VOLUME } from '@/lib/game/settings';
 import {
   initSound,
@@ -322,9 +322,10 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
       if (!tile || tile.type === 'void' || tile.visited) return;
       if (tile.type === 'king') {
         if (!canMoveToKing(state)) {
+          const [oneStarTarget] = getMathStarTargets(state.requiredScore);
           const text =
             state.gameMode === 'math_tour'
-              ? `Need ${Math.max(0, state.requiredScore - state.currentScore)} more score!`
+              ? `Need ${oneStarTarget - state.currentScore} more score!`
               : 'Clear all tiles first!';
           const notice = { text, className: 'text-rose-400' };
           setMessage(notice);
@@ -566,7 +567,7 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
   } : { mode: state.gameMode };
   const win = modalType === 'win' ? winData : null;
   const result = win ? (tour.mode === 'math_tour' ? {
-    ...win, type: 'math-win' as const, score: tour.score, requiredScore: tour.requiredScore,
+    ...win, type: 'math-win' as const, score: tour.score, requiredScore: getMathStarTargets(tour.requiredScore)[0],
     history: tour.history, tilesLeft: state.tilesLeft,
   } : {
     ...win, type: 'win' as const,

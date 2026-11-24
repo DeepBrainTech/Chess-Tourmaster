@@ -103,6 +103,7 @@ export function generateLevelConfig(level: number, mode: GameMode): LevelConfig 
       const minimumScoringMoves = 5 + Math.floor(level * 0.08);
       requiredScore = Math.max(optimisticMathScore(grid, minimumScoringMoves - 1) + 1,
         Math.floor(score * (0.35 + level * 0.0045)));
+      // Keep the original board acceptance rule so fixed levels keep their existing tiles.
       if (score >= requiredScore * 1.2) break;
       if (attempt === 99) throw new Error('Could not certify math difficulty and three-star route');
     }

@@ -1,7 +1,7 @@
 'use client';
 
 import type { GameMode } from '@/lib/game/types';
-import { MATH_STAR_RATIOS } from '@/lib/game/rules';
+import { MATH_STAR_PERCENTAGES } from '@/lib/game/rules';
 
 type Props = {
   busy?: boolean;
@@ -54,7 +54,9 @@ export default function MainModal({
           </li>
           <li className="flex items-start">
             <i className="fas fa-star w-6 text-yellow-400 mt-1" />
-            <span><strong>Stars:</strong> {isMathTour ? `By score (≥${MATH_STAR_RATIOS.three * 100}% = 3★, ≥${MATH_STAR_RATIOS.two * 100}% = 2★).` : 'By time (faster = more stars).'}</span>
+            <span><strong>Stars:</strong> {isMathTour
+              ? `By level target (≥${MATH_STAR_PERCENTAGES.one}% = 1★, ≥${MATH_STAR_PERCENTAGES.two}% = 2★, ≥${MATH_STAR_PERCENTAGES.three}% = 3★).`
+              : 'By time (faster = more stars).'}</span>
           </li>
         </ul>
         <button

@@ -1,6 +1,7 @@
 import type { GameState, LevelConfig, HistoryEntry, GameMode, ThemeName } from './types';
 import { THEME_CLASSES } from './types';
 import { getValidMoves } from './moves';
+import { getMathStarTargets } from './rules';
 
 export type GameAction =
   | { type: 'SET_MODE'; payload: GameMode }
@@ -238,7 +239,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
 export function canMoveToKing(state: GameState): boolean {
   if (state.gameMode === 'math_tour') {
-    return state.currentScore >= state.requiredScore;
+    const [oneStarTarget] = getMathStarTargets(state.requiredScore);
+    return state.currentScore >= oneStarTarget;
   }
   return state.tilesLeft === 0;
 }

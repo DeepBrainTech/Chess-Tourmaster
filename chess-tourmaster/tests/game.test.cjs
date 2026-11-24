@@ -2,13 +2,13 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { createLoader } = require('./helpers/load-ts.cjs');
 const load = createLoader();
-const { generateLevelConfig } = load('lib/game/levelGenerator.ts');
+const { generateLevelConfig, getValidMoves } = load('lib/game/levelGenerator.ts');
 const { getFixedLevelConfig } = load('lib/game/levelCatalog.ts');
 const { gameReducer, initialGameState, isValidMove } = load('lib/game/gameReducer.ts');
 const { getHintMove } = load('lib/game/hint.ts');
 const { replayGame } = load('lib/game/replay.ts');
 const { GameClock } = load('lib/game/clock.ts');
-const { calculateStars } = load('lib/game/rules.ts');
+const { calculateStars, getMathStarTargets } = load('lib/game/rules.ts');
 const { optimisticMathScore } = load('lib/game/scoreBound.ts');
 const start = (config, mode = 'classic') => gameReducer({ ...initialGameState, gameMode: mode }, { type: 'START_LEVEL', payload: config });
 const move = (state, pos) => gameReducer(state, { type: 'MOVE', payload: pos });
@@ -36,7 +36,7 @@ for (const mode of ['classic', 'math_tour']) {
       if (mode === 'classic') assert.equal(state.tilesLeft, 0);
       else {
         assert.equal(state.currentScore, expectedScore);
-        assert.ok(expectedScore >= config.requiredScore * 1.2, `three stars unreachable ${level}`);
+        assert.ok(expectedScore >= getMathStarTargets(config.requiredScore)[2], `three stars unreachable ${level}`);
         assert.ok(config.grid.flat().filter(t => t.hasFire).length <= 3);
         assert.ok(config.requiredScore > optimisticMathScore(config.grid, 4 + Math.floor(level * 0.08)),
           `target permits an overly short math route ${level}`);
@@ -51,6 +51,9 @@ for (const mode of ['classic', 'math_tour']) {
         state = move(state, hint.move);
       }
       assert.ok(won(state), `hints stranded ${mode}:${level}`);
+      if (mode === 'math_tour') {
+        assert.ok(state.currentScore >= getMathStarTargets(config.requiredScore)[2], `hints missed three stars ${level}`);
+      }
     }
   });
 }
@@ -97,6 +100,43 @@ test('moves reject stopped games, invalid coordinates, repeat visits and prematu
   assert.deepEqual(switched.grid, []);
 });
 
+test('Math Tour unlocks King capture at the one-star target', () => {
+  const config = generateLevelConfig(1, 'math_tour');
+  const state = start(config, 'math_tour');
+  const [approach] = getValidMoves(state.kingPos.r, state.kingPos.c, state.gridSizeVal);
+  const below = { ...state, knightPos: approach, currentScore: 27 };
+  const atTarget = { ...below, currentScore: 28 };
+  assert.equal(move(below, state.kingPos), below);
+  assert.ok(won(move(atTarget, state.kingPos)));
+});
+
+test('Math Tour hints take a higher-scoring detour and keep a known finish if the search budget runs out', () => {
+  const mode = 'math_tour';
+  const config = generateLevelConfig(1, mode);
+  const knightPos = { r: 0, c: 0 };
+  const kingPos = { r: 1, c: 2 };
+  const first = { r: 2, c: 1 };
+  const second = { r: 3, c: 3 };
+  const state = start({ ...config, knightPos, kingPos, initialScore: 90, requiredScore: 100, tilesLeft: 2,
+    solution: [kingPos], grid: config.grid.map(row => row.map(({ r, c }) => {
+      const visited = r === knightPos.r && c === knightPos.c;
+      const king = r === kingPos.r && c === kingPos.c;
+      const scoring = [first, second].some(pos => r === pos.r && c === pos.c);
+      return { r, c, visited, type: king ? 'king' : visited || scoring ? 'empty' : 'void',
+        hasFire: false, value: scoring ? 5 : 0 };
+    })),
+  }, mode);
+  assert.deepEqual(getHintMove(state, 0), { type: 'next_move', move: kingPos });
+  assert.deepEqual(getHintMove(state), { type: 'next_move', move: first });
+  const next = move(state, first);
+  assert.deepEqual(getHintMove(next), { type: 'next_move', move: second });
+  const ready = move(next, second);
+  assert.deepEqual(getHintMove(ready), { type: 'next_move', move: kingPos });
+  const finished = move(ready, kingPos);
+  assert.ok(won(finished));
+  assert.equal(finished.currentScore, 100);
+});
+
 test('undo restores score, visited tiles and adjacent fires exactly', () => {
   for (const mode of ['classic', 'math_tour']) {
     let state = start(generateLevelConfig(100, mode), mode);
@@ -121,7 +161,7 @@ function oracle(state) {
       const key = `${tile.r},${tile.c}`;
       if (seen.has(key) || tile.visited) continue;
       if (tile.type === 'king') {
-        if (state.gameMode === 'math_tour' ? score >= state.requiredScore : remaining === 0) return true;
+        if (state.gameMode === 'math_tour' ? score >= Math.ceil(state.requiredScore * 90 / 100) : remaining === 0) return true;
         continue;
       }
       const nextScore = (tile.tileMultiplier ?? 1) > 1 ? score * tile.tileMultiplier : score + tile.value;
@@ -178,9 +218,10 @@ test('fire gets a fresh deadline on every landing, pauses preserve remaining tim
 });
 
 test('star boundaries are shared; replay rejects fabricated, incomplete and post-win moves', () => {
-  assert.equal(calculateStars('math_tour', 120, 100, 0, 1), 3);
-  assert.equal(calculateStars('math_tour', 108, 100, 0, 1), 2);
-  assert.equal(calculateStars('math_tour', 107, 100, 0, 1), 1);
+  assert.equal(calculateStars('math_tour', 110, 100, 0, 1), 3);
+  assert.equal(calculateStars('math_tour', 109, 100, 0, 1), 2);
+  assert.equal(calculateStars('math_tour', 99, 100, 0, 1), 1);
+  assert.equal(calculateStars('math_tour', 89, 100, 0, 1), 0);
   assert.equal(calculateStars('classic', 0, 0, 25, 25), 3);
   assert.equal(calculateStars('classic', 0, 0, 37.5, 25), 2);
   assert.equal(calculateStars('classic', 0, 0, 38, 25), 1);
