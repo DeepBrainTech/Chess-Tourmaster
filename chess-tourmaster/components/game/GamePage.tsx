@@ -103,6 +103,7 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
   const [portalAssets, setPortalAssets] = useState<PortalAssets | null>(initialPortalAssets ?? null);
   const assetsRevision = useRef(0);
   const [hintTarget, setHintTarget] = useState<{ r: number; c: number } | null>(null);
+  const [noWinningRoute, setNoWinningRoute] = useState(false);
   const [message, setMessage] = useState<{ text: string; className: string } | null>(null);
   const [shake, setShake] = useState(false);
   const session = useRef(new GameSessionClient());
@@ -419,6 +420,7 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
       setStarting(true);
       setSaveFailed(false);
       setMessage(null);
+      setNoWinningRoute(false);
       initSound();
       try {
         const unlocked = requestedLevel ?? (await loadProgress(mode, false))?.total_levels;
@@ -499,6 +501,7 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
       if (!used) return;
       wonByCaptureRef.current = false;
       setHintTarget(null);
+      setNoWinningRoute(false);
       dispatch({ type: 'UNDO' });
     } catch {
       setMessage({
@@ -516,6 +519,7 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
     if (!accountId || !state.isPlaying || paused || operationBusy.current) return 'failed';
     operationBusy.current = true;
     setHintLoading(true);
+    setNoWinningRoute(false);
     try {
       await session.current.transition('pause');
       const hint = await session.current.hint(state.history.map(entry => entry.prevPos));
@@ -525,10 +529,12 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
     } catch (error) {
       if (error instanceof GameServiceError && error.code === 'NO_HINT_LEFT') return 'need_exchange';
       setHintTarget(null);
+      if (error instanceof GameServiceError && error.code === 'NO_WIN_PATH') {
+        setNoWinningRoute(true);
+        return 'failed';
+      }
       setMessage({
-        text: error instanceof GameServiceError && error.code === 'NO_WIN_PATH'
-          ? 'No winning route remains. Undo or restart. No hint used.'
-          : error instanceof GameServiceError && error.code === 'SEARCH_EXHAUSTED'
+        text: error instanceof GameServiceError && error.code === 'SEARCH_EXHAUSTED'
             ? 'Could not verify a winning route. No hint used.' : 'Hint service unavailable. Retry safely.',
         className: 'text-rose-300',
       });
@@ -628,6 +634,8 @@ export default function GamePage({ accountId, username, initialPortalAssets, por
         undoCount={undoCount}
         hintCount={hintCount}
         hintTarget={hintTarget}
+        noWinningRoute={noWinningRoute && !paused && state.isPlaying}
+        onDismissHint={() => setNoWinningRoute(false)}
         onHome={() => backHome()}
         onMap={() => backHome(state.gameMode)}
         onSettings={() => setModalType('settings')}

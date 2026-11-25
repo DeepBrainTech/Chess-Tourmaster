@@ -194,7 +194,14 @@
 .stats div + div dt { color: #8dcfff; }
 .stats dd { font-size: max(1.125rem, calc(52 * var(--u))); line-height: 1; }
 
-.actions { display: flex; justify-content: center; gap: min(10%, calc(50 * var(--u))); margin-top: auto; }
+.actions {
+  --action-size: max(44px, calc(106 * var(--u)));
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: min(10%, calc(50 * var(--u)));
+  margin-top: auto;
+}
 .action {
   display: grid;
   justify-items: center;
@@ -206,14 +213,57 @@
 
 .action .button {
   position: relative;
-  width: max(44px, calc(106 * var(--u)));
-  height: max(44px, calc(106 * var(--u)));
+  width: var(--action-size);
+  height: var(--action-size);
   border-radius: calc(25.5 * var(--u));
 }
 
-.action:not(:disabled):hover .button, .mapButton:not(:disabled):hover { filter: brightness(1.12); }
+.action:not(:disabled, [aria-disabled='true']):hover .button, .mapButton:not(:disabled):hover { filter: brightness(1.12); }
+.action[aria-disabled='true'] { cursor: not-allowed; }
 .button[data-action='undo'] { background: #a45cff; }
 .button[data-action='hint'] { background: #ffc83d; }
+
+.hintAction {
+  display: grid;
+  grid-template-columns: var(--action-size);
+  justify-items: center;
+}
+
+.hintBubble {
+  position: relative;
+  grid-row: 1;
+  justify-self: end;
+  display: flex;
+  align-items: flex-start;
+  width: min(16rem, 65vw, max(12rem, calc(450 * var(--u))));
+  margin-bottom: 12px;
+  border: 2px solid var(--outline);
+  border-radius: 14px;
+  background: var(--inset);
+  box-shadow: inset 0 2px #8fa2ff45, 0 4px var(--outline);
+  color: #c9d2ff;
+  font: .875rem / 1.35 system-ui, sans-serif;
+}
+
+.hintBubble::after {
+  position: absolute;
+  right: calc(var(--action-size) / 2 - 8px);
+  bottom: -8px;
+  width: 14px;
+  height: 14px;
+  rotate: 45deg;
+  border: solid var(--outline);
+  border-width: 0 2px 2px 0;
+  background: var(--inset);
+  content: '';
+  pointer-events: none;
+}
+
+.hintStatus { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.hintBubble .hintStatus { padding: 12px 0 12px 12px; }
+.hintStatus strong { display: block; margin-bottom: 3px; color: #ffc83d; }
+.hintClose { flex: 0 0 32px; min-height: 36px; border-radius: 10px; font-size: 1.25rem; }
+.hintClose:focus-visible { outline: 2px solid #ffc83d; outline-offset: -3px; }
 
 .count {
   position: absolute;
@@ -261,11 +311,15 @@
   padding-block: calc(18.5 * var(--u)) calc(10 * var(--u));
 }
 .math .stats div:first-child dt { color: #cda5ff; }
-.math .actions { gap: min(12%, calc(50 * var(--u))); }
-.math .action .button { width: max(44px, calc(102 * var(--u))); height: max(44px, calc(102 * var(--u))); }
+.math .actions { --action-size: max(44px, calc(102 * var(--u))); gap: min(12%, calc(50 * var(--u))); }
 
 @media (prefers-reduced-motion: no-preference) {
+  .hintBubble { animation: hint-appear 140ms ease-out; }
   .board [data-dimmed] { transition: opacity 180ms ease-out; }
+}
+
+@keyframes hint-appear {
+  from { opacity: 0; translate: 0 4px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { MAX_LEVELS } from '@/lib/game/rules';
 import type { GameMode, HistoryEntry, Position } from '@/lib/game/types';
 import { GameAccount, GameIcon, GameLogo } from './GameArtwork';
@@ -22,6 +22,8 @@ type Props = {
   undoCount: number;
   hintCount: number;
   hintTarget: Position | null;
+  noWinningRoute: boolean;
+  onDismissHint: () => void;
   onHome: () => void;
   onMap: () => void;
   onSettings: () => void;
@@ -49,10 +51,11 @@ function ClassicIcon({ name }: { name: keyof typeof icons }) {
 
 export default function Tour({
   level, tilesLeft, time, username, coins, shopUrl, themed, busy, canUndo, canHint, undoCount, hintCount, hintTarget,
-  onHome, onMap, onSettings, onHelp, onRestart, onUndo, onHint, children, ...game
+  noWinningRoute, onDismissHint, onHome, onMap, onSettings, onHelp, onRestart, onUndo, onHint, children, ...game
 }: Props) {
   const math = game.mode === 'math_tour';
   const title = tourTitle[game.mode];
+  const hintButton = useRef<HTMLButtonElement>(null);
   useEffect(() => { window.scrollTo(0, 0); }, [game.mode]);
 
   const actions = [
@@ -117,15 +120,36 @@ export default function Tour({
         </div>
 
         <div className={styles.actions}>
-          {actions.map(({ icon, label, action, count, disabled }) => <button type="button" key={icon}
-            disabled={disabled} className={styles.action} onClick={action}
-            aria-label={count === null ? label : `${label}, ${count} remaining`}>
-            <span className={styles.button} data-action={icon}>
-              <ClassicIcon name={icon} />
-              {count !== null && <span className={styles.count} aria-hidden="true">{count}</span>}
-            </span>
-            {label}
-          </button>)}
+          {actions.map(({ icon, label, action, count, disabled }) => {
+            const hint = icon === 'hint';
+            const button = <button type="button" key={icon} ref={hint ? hintButton : undefined}
+              disabled={!hint && disabled} aria-disabled={hint && disabled ? true : undefined}
+              className={styles.action} onClick={() => { if (!disabled) action(); }}
+              aria-label={count === null ? label : `${label}, ${count} remaining`}>
+              <span className={styles.button} data-action={icon}>
+                <ClassicIcon name={icon} />
+                {count !== null && <span className={styles.count} aria-hidden="true">{count}</span>}
+              </span>
+              {label}
+            </button>;
+            if (!hint) return button;
+
+            return <div className={styles.hintAction} key={icon}>
+              {button}
+              <div className={noWinningRoute ? styles.hintBubble : undefined}>
+                <div role="status" className={styles.hintStatus}>
+                  {noWinningRoute && <>
+                    <strong>No winning route from here.</strong>{' '}
+                    <span>Undo or restart. No hint used.</span>
+                  </>}
+                </div>
+                {noWinningRoute && <button type="button" className={styles.hintClose} aria-label="Dismiss hint message"
+                  onClick={() => { onDismissHint(); hintButton.current?.focus(); }}>
+                  <span aria-hidden="true">×</span>
+                </button>}
+              </div>
+            </div>;
+          })}
         </div>
       </aside>
     </div>
